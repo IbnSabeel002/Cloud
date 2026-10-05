@@ -7,6 +7,7 @@ posts is untrusted. Everything that reaches HTML is escaped.
 from __future__ import annotations
 
 import html
+import re
 from datetime import date
 
 SLACK_LIMIT = 4500  # Slack allows 5,000 per text element; leave headroom.
@@ -41,6 +42,30 @@ FLAG_LABELS = {
     "needs_own_labour_card": "wants you to bring your own labour card (yours must come from the new employer)",
     "no_job_link": "no direct link to the job (search its title and company)",
 }
+
+
+# Text from job posts, emails and tool errors ends up in a message pushed to Slack and a phone. It is untrusted:
+# a title like "Role](https://evil.example/login) [Reply now" must not turn into a live link or an injected line.
+_URL_OR_EMAIL = re.compile(r"https?://\S+|www\.\S+|[\w.+-]+@[\w-]+(?:\.[\w-]+)+", re.I)
+_MARKUP = re.compile(r"[\[\]<>`|\\]")
+_SAFE_URL = re.compile(r"^https://[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)+(?::\d+)?(?:[/?#][^\s()<>\[\]`\"'\\|]*)?$")
+
+# Steps whose absence from the health list means the run skipped them (a run that never read the settings looked
+# healthy). A name must appear in the health file, ok or not.
+REQUIRED_SOURCES = ("Settings", "Tracker write")
+
+
+def _plain(text, limit: int = 120) -> str:
+    """One line of harmless text: no links, addresses, markup or line breaks, at most `limit` characters."""
+    out = _URL_OR_EMAIL.sub("", str(text if text is not None else ""))
+    out = re.sub(r"\s+", " ", _MARKUP.sub("", out)).strip()
+    return out[:limit].rstrip()
+
+
+def _safe_url(url) -> str:
+    """The link if it is a plain https address that cannot break out of a markdown link, else an empty string."""
+    text = str(url or "").strip()
+    return text if len(text) <= 300 and _SAFE_URL.match(text) else ""
 
 
 def reason_label(reason: str) -> str:
@@ -78,7 +103,7 @@ def _pay(entry: dict) -> str:
     if entry.get("pay_display") in (None, "", "not listed"):
         # With no description captured the pay was never looked for, which is not the same as "not listed".
         return "pay not checked" if "no_jd" in (entry.get("flags") or []) else "pay not listed"
-    return f"{entry['pay_display']} ({entry.get('pay_source', 'unknown')})"
+    return f"{_plain(entry['pay_display'], 60)} ({_plain(entry.get('pay_source', 'unknown'), 20)})"
 
 
 def _health_line(health: list[dict] | None) -> tuple[str, bool]:
@@ -86,11 +111,18 @@ def _health_line(health: list[dict] | None) -> tuple[str, bool]:
         return "Run health: no source report supplied", True
     parts, degraded = [], False
     for h in health:
+        name = _plain(h.get("source"), 60) or "unnamed source"
         if h.get("ok"):
-            parts.append(f"✅ {h['source']}")
+            parts.append(f"✅ {name}")
         else:
             degraded = True
-            parts.append(f"⚠️ {h['source']} failed" + (f" ({h['detail']})" if h.get("detail") else ""))
+            detail = _plain(h.get("detail"), 120)
+            parts.append(f"⚠️ {name} failed" + (f" ({detail})" if detail else ""))
+    reported = {str(h.get("source") or "").strip().lower() for h in health}
+    for required in REQUIRED_SOURCES:
+        if required.lower() not in reported:
+            degraded = True
+            parts.append(f"⚠️ {required} never reported")
     return "Run health: " + " · ".join(parts), degraded
 
 
@@ -115,7 +147,7 @@ def _chunk(text: str, limit: int) -> list[str]:
 def digest_chunks(
     summary: dict, shortlist: list[dict], health: list[dict] | None, analysis: dict | None,
     report_url: str | None, today: date, max_top: int = 5, limit: int = SLACK_LIMIT,
-    tracker_url: str | None = None, drafts_created: int | None = None,
+    tracker_url: str | None = None, drafts_created: int | None = None, playbook_line: str | None = None,
 ) -> list[str]:
     analysis = analysis or {}
     health_line, degraded = _health_line(health)
@@ -126,13 +158,15 @@ def digest_chunks(
     if degraded:
         out.append("⚠️ **Degraded run — some sources failed, so today's list may be incomplete.**")
     out.append(health_line)
+    if playbook_line:
+        out.append(_plain(playbook_line, 100))
     out.append(
         f"Today: **{summary['new_shortlisted']} new** shortlisted · {summary['already_seen']} already seen · "
         f"{summary['rejected_jobs']} screened out · {summary['below_threshold']} weak matches"
     )
     if reasons:
         top = sorted(reasons.items(), key=lambda kv: (-kv[1], kv[0]))[:5]
-        out.append("Screened out because: " + " · ".join(f"{n} {reason_label(r)}" for r, n in top))
+        out.append("Screened out because: " + " · ".join(f"{n} {_plain(reason_label(r), 60)}" for r, n in top))
     out.append("")
 
     picks = shortlist[:max_top]
@@ -140,14 +174,15 @@ def digest_chunks(
         out.append("**Top picks**")
         for i, e in enumerate(picks, 1):
             note = analysis.get(e["job_id"], {})
-            title = f"[{e['title']}]({e['url']})" if e.get("url") else e["title"]
-            out.append(f"{i}. **{title}** — {e['company']}")
+            name, link = _plain(e["title"]), _safe_url(e.get("url"))
+            title = f"[{name}]({link})" if link else name
+            out.append(f"{i}. **{title}** — {_plain(e['company'])}")
             out.append(
                 f"   Score {e['score']} · Tier {e['tier']} · {_pay(e)} · posted {_age(e)}"
                 + (" · ⭐ strong" if e.get("strong") else "")
             )
-            out.append("   Why: " + (note.get("why") or e.get("why") or "n/a"))
-            checks = [flag_label(f) for f in e.get("flags", []) if f != "pay_unlisted"]  # pay is already shown above
+            out.append("   Why: " + (_plain(note.get("why") or e.get("why"), 300) or "n/a"))
+            checks = [_plain(flag_label(f), 80) for f in e.get("flags", []) if f != "pay_unlisted"]  # pay is already shown above
             if checks:
                 out.append("   Check: " + ", ".join(checks[:6]))
         extra = len(shortlist) - len(picks)
@@ -156,9 +191,9 @@ def digest_chunks(
     else:
         out.append("No new matches that clear the bar today. That is normal on slow days; the filter is working.")
     out.append("")
-    if report_url:
+    if _safe_url(report_url):
         out.append(f"Full report + outreach drafts: {report_url}")
-    if tracker_url:
+    if _safe_url(tracker_url):
         out.append(f"Tracker (change a status or add a note): {tracker_url}")
     strong = len(summary.get("outreach_keys") or [])
     if drafts_created:
@@ -207,7 +242,7 @@ def render_report_html(
         parts.append("<p>No new matches cleared the bar today.</p>")
     for e in shortlist:
         note = analysis.get(e["job_id"], {})
-        link = f'<a href="{_esc(e["url"])}">{_esc(e["title"])}</a>' if e.get("url") else _esc(e["title"])
+        link = f'<a href="{_esc(_safe_url(e.get("url")))}">{_esc(e["title"])}</a>' if _safe_url(e.get("url")) else _esc(e["title"])
         parts.append(f"<h3>{link} — {_esc(e['company'])}</h3>")
         parts.append(
             f"<p>Score <b>{e['score']}</b>{' (strong)' if e.get('strong') else ''} · Tier {_esc(e['tier'])} · "
@@ -221,7 +256,7 @@ def render_report_html(
         )
         if e.get("flags"):
             parts.append("<p>Check: " + _esc(", ".join(flag_label(f) for f in e["flags"])) + "</p>")
-        for url in e.get("all_urls", [])[1:]:
+        for url in (u for u in e.get("all_urls", [])[1:] if _safe_url(u)):
             parts.append(f'<p>Also on: <a href="{_esc(url)}">{_esc(url)}</a></p>')
         if note.get("gaps"):
             parts.append(f"<p><b>Fit and gaps</b><br>{_para(note['gaps'])}</p>")
@@ -253,7 +288,7 @@ def render_report_md(
         note = analysis.get(e["job_id"], {})
         lines += ["", f"## {e['title']} — {e['company']}",
                   f"Score {e['score']} · Tier {e['tier']} · {_pay(e)} · posted {_age(e)}",
-                  e.get("url", "")]
+                  _safe_url(e.get("url"))]
         for key, label in (("gaps", "Fit and gaps"), ("linkedin_note", "LinkedIn note"), ("email_note", "Email note")):
             if note.get(key):
                 lines += ["", f"**{label}**", note[key]]

@@ -96,9 +96,9 @@ def plan_writes(before: list[dict], after: list[dict], out_dir: str | Path, coll
     return manifest
 
 
-def run_doc(summary: dict, health: list[dict] | None, report_url: str | None) -> dict:
-    """The document the tracker page shows as 'last run'."""
-    return {
+def run_doc(summary: dict, health: list[dict] | None, report_url: str | None, playbook: str | None = None) -> dict:
+    """The document the tracker page shows as 'last run'. `playbook` is the receipt line of the playbook that ran."""
+    doc = {
         "Date": summary["today"],
         "HuntDay": summary.get("hunt_day"),
         "NewShortlisted": summary["new_shortlisted"],
@@ -108,3 +108,6 @@ def run_doc(summary: dict, health: list[dict] | None, report_url: str | None) ->
         "Health": health or [],
         "ReportUrl": report_url or "",
     }
+    if playbook:
+        doc["Playbook"] = playbook
+    return doc

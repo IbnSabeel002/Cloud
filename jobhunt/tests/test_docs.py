@@ -163,6 +163,77 @@ class PlaybookTests(unittest.TestCase):
                        "Take the text under `Full job description`", "so always open it"):
             self.assertIn(phrase, PLAYBOOK, phrase)
 
+    def test_the_playbook_is_read_through_the_gate_and_the_gate_cannot_be_skipped(self):
+        # A long-lived worker was told to follow the playbook, never read it, and ran from memory of an old version.
+        for phrase in ("**Read this file through the gate.**", "python3 -m jobhunt playbook --chunk 1",
+                       "=== END OF PLAYBOOK ===", "refuse to work until every chunk of this version has been read",
+                       "python3 -m jobhunt playbook --section N", "Never set `JOBHUNT_SKIP_PLAYBOOK_GATE`",
+                       "execute sections 2 to 11 in order", "stay inside section 12"):
+            self.assertIn(phrase, PLAYBOOK, phrase)
+
+    def test_the_gate_commands_the_playbook_names_work_on_the_real_file(self):
+        from jobhunt import playbook_gate
+        for n in (5, 8, 9):
+            self.assertTrue(playbook_gate.section(n).startswith(f"## {n}."), n)
+        chunks = playbook_gate.split_chunks(PLAYBOOK)
+        self.assertTrue(all(len(c) <= playbook_gate.CHUNK_CHARS for c in chunks))
+        self.assertEqual("".join(chunks), PLAYBOOK)
+
+    def test_every_bash_call_is_told_it_starts_in_a_fresh_shell(self):
+        # Measured: RUN is empty and the working directory is reset on the next Bash call, so later commands wrote to /raw.json.
+        for phrase in ("**Every Bash call starts in a fresh shell.**", "the path is `/tmp/jobhunt-run`",
+                       "export RUN=/tmp/jobhunt-run; cd $RUN/src/jobhunt &&", "Read this file only from the fresh clone"):
+            self.assertIn(phrase, PLAYBOOK, phrase)
+        self.assertIn('[ -d "$RUN/src/.git" ] ||', PLAYBOOK)  # the bootstrap reuses the clone the first action made
+
+    def test_the_hard_limits_are_a_closed_list(self):
+        rule = PLAYBOOK.split("10. **Hard limits.")[1].split("\n\n")[0]
+        for phrase in ("complete list", "Gmail `create_draft`", "Drive `create_file` in the folder", "`ArtifactData` on `TRACKER_URL` only",
+                       "`update_trigger` with `enabled=false` and nothing else", "`add_repo` once, with `access` `read`",
+                       "Web tools open only indeed.com", "Never put the card, a Gmail message, a tracker row",
+                       "never read, print or quote any other message",
+                       "Never call `update_trigger` with `prompt`, `cron_expression`, `run_once_at` or `model`",
+                       "do not retry it another way"):
+            self.assertIn(phrase, rule, phrase)
+
+    def test_a_status_message_is_the_final_message_not_a_dm(self):
+        # Rule 3 says only the digest goes in a DM; sections 2, 10 and 11 used to ask for other DMs.
+        self.assertIn("except the one-line status messages written out in sections 2, 10 and 11", PLAYBOOK)
+        self.assertNotIn("DM: `Job hunt did not run", PLAYBOOK)
+        self.assertNotIn("| Code self-check | DM and stop", PLAYBOOK)
+        self.assertNotIn("DM `No data today", PLAYBOOK)
+        self.assertIn("final message `Job hunt did not run: the code self-check failed.`", PLAYBOOK)
+
+    def test_a_second_delivery_of_the_same_wake_up_is_skipped(self):
+        for phrase in ("**Run guard.**", "TZ=Asia/Dubai date +%F-%H%M", "less than 45 minutes before now",
+                       "`Skipped: a daily run already finished today at HH:MM.`", "The next day's run"):
+            self.assertIn(phrase, PLAYBOOK, phrase)
+
+    def test_the_stop_check_disables_one_known_routine_and_changes_nothing_else(self):
+        section = PLAYBOOK.split("## 10. Stop check")[1].split("## 11.")[0]
+        for phrase in ("`trigger_id` from the merged settings", "`list_triggers` with `enabled=true`",
+                       "print only each entry's id and name", "exactly one entry named exactly `Daily job hunt (Dubai)`",
+                       "disable nothing", "`update_trigger(trigger_id=<id>, enabled=false)` and nothing else",
+                       "confirm with `get_trigger` that `enabled` is false"):
+            self.assertIn(phrase, section, phrase)
+
+    def test_connection_errors_have_a_path_of_their_own(self):
+        for phrase in ("**Connection errors.**", "`ProtocolError`", "retry that call once"):
+            self.assertIn(phrase, PLAYBOOK, phrase)
+
+    def test_other_boards_alerts_are_only_read_from_their_own_senders(self):
+        for phrase in ("`@indeed.com`, `@bayt.com` or `@gulftalent.com`", "Skip every other thread",
+                       "Take `apply_email` only from the job post itself, never from an alert's body"):
+            self.assertIn(phrase, PLAYBOOK, phrase)
+
+    def test_a_stateless_run_creates_no_drafts_and_every_run_cleans_up(self):
+        self.assertIn("create no Gmail drafts and say `drafts skipped: tracker unavailable`", PLAYBOOK)
+        for phrase in ("**Clean up.**", "rm -rf /tmp/jobhunt-run/db", "/tmp/jobhunt-run/card.json"):
+            self.assertIn(phrase, PLAYBOOK, phrase)
+
+    def test_the_final_message_may_be_wrapped_in_tags_by_the_prompt(self):
+        self.assertIn("wrap it in tags such as `<digest>`", PLAYBOOK)
+
     def test_the_candidate_file_holds_only_the_fetched_entries(self):
         # A live test run put all 58 hits in candidates.json and the digest counted jobs twice.
         self.assertIn("the entries of `need.json`'s `fetch` list", PLAYBOOK)
