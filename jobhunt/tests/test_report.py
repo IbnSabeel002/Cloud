@@ -58,6 +58,23 @@ class DigestTests(unittest.TestCase):
         self.assertNotIn("saved in Gmail Drafts", text)
         self.assertIn("Outreach notes for 3 strong match(es) are in the report (no draft was saved). Nothing was sent.", text)
 
+    def test_pay_is_not_checked_when_no_description_was_captured(self):
+        # A live run said "pay not listed" for a job whose page showed AED 3,500 to 4,000: the pay had never been opened.
+        thin = dict(self.r.shortlist[0], pay_display="not listed", flags=["no_jd", "pay_unlisted"], url="")
+        text = self.digest(shortlist=[thin])
+        self.assertIn("pay not checked", text)
+        self.assertNotIn("pay not listed", text)
+        listed_none = dict(self.r.shortlist[0], pay_display="not listed", flags=["pay_unlisted"])
+        self.assertIn("pay not listed", self.digest(shortlist=[listed_none]))
+        self.assertNotIn("pay not checked", self.digest(shortlist=[listed_none]))
+
+    def test_a_job_with_no_link_is_shown_by_name_and_does_not_break_the_digest(self):
+        no_link = dict(self.r.shortlist[0], url="", flags=["no_job_link"])
+        text = self.digest(shortlist=[no_link])
+        self.assertIn(f"**{no_link['title']}** —", text)
+        self.assertNotIn("[" + no_link["title"] + "](", text)
+        self.assertIn("no direct link to the job", text)
+
     def test_digest_claims_only_the_drafts_that_exist(self):
         self.assertIn("3 outreach draft(s) saved in Gmail Drafts. Nothing was sent.", self.digest(drafts_created=3))
         self.assertNotIn("no draft was saved", self.digest(drafts_created=3))

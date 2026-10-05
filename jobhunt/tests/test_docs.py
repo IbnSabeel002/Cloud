@@ -158,6 +158,11 @@ class PlaybookTests(unittest.TestCase):
                        "Never a results or search page", "`links: true`"):
             self.assertIn(phrase, PLAYBOOK, phrase)
 
+    def test_cards_from_a_results_page_are_opened_through_their_own_link_with_firecrawl_as_the_fallback(self):
+        for phrase in ("Cards from a results page", "Indeed answers it with error 401 (measured)", "`firecrawl_scrape`",
+                       "Take the text under `Full job description`", "so always open it"):
+            self.assertIn(phrase, PLAYBOOK, phrase)
+
     def test_the_candidate_file_holds_only_the_fetched_entries(self):
         # A live test run put all 58 hits in candidates.json and the digest counted jobs twice.
         self.assertIn("the entries of `need.json`'s `fetch` list", PLAYBOOK)
