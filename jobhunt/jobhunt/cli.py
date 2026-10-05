@@ -18,6 +18,7 @@ from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 
 from . import store, tracker
+from .normalize import job_id, job_key
 from .profile import load_profile
 from .report import digest_chunks, render_report_html, render_report_md
 from .salary import parse_pay
@@ -94,15 +95,21 @@ def prefilter(profile: dict, raw: list, existing_rows: list, today: date, limit:
     skipped: Counter = Counter()
     skipped["invalid"] = len(raw) - sum(1 for c in raw if not validate_candidate(c))
     skipped["duplicate"] = in_batch_dups
+    skipped_ids: dict[str, list] = {}  # which jobs each count stands for, so `run` can count each job once
+
+    def drop(reason: str, job: str) -> None:
+        skipped[reason] += 1
+        skipped_ids.setdefault(reason, []).append(job)
+
     ranked = []
     for c in unique:
         ev = evaluate(c, profile, today)
         if ev.job_id in known:
-            skipped["already_seen"] += 1
+            drop("already_seen", ev.job_id)
         elif ev.reject_reasons:
-            skipped[ev.reject_reasons[0]] += 1
+            drop(ev.reject_reasons[0], ev.job_id)
         elif "off_target_title" in ev.flags:
-            skipped["off_target_title"] += 1
+            drop("off_target_title", ev.job_id)
         else:
             ranked.append((-ev.components["title"], ev.age_days if ev.age_days is not None else 99, c))
     ranked.sort(key=lambda t: (t[0], t[1]))
@@ -111,6 +118,7 @@ def prefilter(profile: dict, raw: list, existing_rows: list, today: date, limit:
         "fetch": fetch,
         "overflow": max(0, len(ranked) - limit),
         "skipped": {k: v for k, v in skipped.items() if v},
+        "skipped_ids": skipped_ids,
         "raw_in": len(raw),
     }
 
@@ -150,11 +158,21 @@ def cmd_prefilter(args) -> int:
     return 0
 
 
-def _fold_in_prefilter(summary: dict, need: dict) -> None:
-    """Jobs the prefilter dropped never reached `run`. Count them so the digest shows the whole funnel."""
+def _fold_in_prefilter(summary: dict, need: dict, run_ids: set | None = None) -> None:
+    """Jobs the prefilter dropped never reached `run`. Count them so the digest shows the whole funnel.
+
+    A job that `run` evaluated has already been counted by `run`, so it is not counted again here. This
+    matters when the candidate file holds every search hit instead of only the ones that were fetched
+    (a live test counted 75 screened-out jobs out of 58 hits).
+    """
     skipped = need.get("skipped", {})
+    skipped_ids = need.get("skipped_ids") or {}
     summary["raw_hits"] = need.get("raw_in", 0)
     for reason, count in skipped.items():
+        if run_ids and reason in skipped_ids:
+            count = len(set(skipped_ids[reason]) - run_ids)
+        if not count:
+            continue
         if reason == "already_seen":
             summary["already_seen"] += count
         elif reason in ("duplicate", "invalid"):
@@ -172,7 +190,11 @@ def cmd_run(args) -> int:
     result = pipeline(profile, candidates, existing, today)
     result.summary["tracker_warnings"] = warnings
     if args.prefilter:
-        _fold_in_prefilter(result.summary, _read_json(args.prefilter))
+        run_ids = {
+            job_id(job_key(c.get("company"), c.get("title"), c.get("location")))
+            for c in candidates if isinstance(c, dict)
+        }
+        _fold_in_prefilter(result.summary, _read_json(args.prefilter), run_ids)
 
     out = Path(args.out)
     out.mkdir(parents=True, exist_ok=True)

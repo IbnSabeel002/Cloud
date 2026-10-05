@@ -115,6 +115,12 @@ class PlaybookTests(unittest.TestCase):
             self.assertIn(phrase, PLAYBOOK, phrase)
         self.assertLess(PLAYBOOK.index("**Rate limit.**"), PLAYBOOK.index("Two quirks seen in live runs"))
 
+    def test_the_candidate_file_holds_only_the_fetched_entries(self):
+        # A live test run put all 58 hits in candidates.json and the digest counted jobs twice.
+        self.assertIn("the entries of `need.json`'s `fetch` list", PLAYBOOK)
+        self.assertIn("Do not add the hits listed under `skipped` or `overflow`", PLAYBOOK)
+        self.assertNotIn("plus any hits that need no details", PLAYBOOK)
+
     def test_the_playbook_knows_the_immediate_joiner_flag(self):
         from jobhunt.report import FLAG_LABELS
         self.assertIn("immediate_joiner", PLAYBOOK)

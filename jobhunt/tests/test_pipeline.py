@@ -235,6 +235,61 @@ class PrefilterFoldInTests(unittest.TestCase):
         self.assertEqual(summary["already_seen"], 1 + 3)  # a seen job is still a seen job
         self.assertEqual(summary["raw_hits"], 68)  # duplicates and invalid records are not jobs the user would see
 
+    def test_a_job_that_run_evaluated_is_not_counted_again(self):
+        # Seen in a live test run: the candidate file held all 58 hits, so every dropped hit was counted
+        # twice ("75 screened out" from "58 hits found", "10 already seen" with 6 jobs stored).
+        from jobhunt.cli import _fold_in_prefilter
+        summary = {"already_seen": 2, "rejected_jobs": 3, "reject_reasons": {"stale": 3}}
+        need = {"raw_in": 8, "skipped": {"stale": 3, "already_seen": 2},
+                "skipped_ids": {"stale": ["j_a", "j_b", "j_c"], "already_seen": ["j_x", "j_y"]}}
+        _fold_in_prefilter(summary, need, run_ids={"j_a", "j_b", "j_c", "j_x", "j_y"})  # run saw all of them
+        self.assertEqual(summary["rejected_jobs"], 3)
+        self.assertEqual(summary["already_seen"], 2)
+        self.assertEqual(summary["reject_reasons"], {"stale": 3})
+
+    def test_only_the_jobs_run_did_not_see_are_added(self):
+        from jobhunt.cli import _fold_in_prefilter
+        summary = {"already_seen": 0, "rejected_jobs": 1, "reject_reasons": {"stale": 1}}
+        need = {"raw_in": 5, "skipped": {"stale": 3}, "skipped_ids": {"stale": ["j_a", "j_b", "j_c"]}}
+        _fold_in_prefilter(summary, need, run_ids={"j_a"})  # j_a was counted by run, j_b and j_c were not
+        self.assertEqual(summary["rejected_jobs"], 1 + 2)
+        self.assertEqual(summary["reject_reasons"], {"stale": 3})
+
+    def test_a_need_file_without_ids_still_folds_by_count(self):
+        # Older need.json files carry counts only; they must keep working.
+        from jobhunt.cli import _fold_in_prefilter
+        summary = {"already_seen": 0, "rejected_jobs": 0, "reject_reasons": {}}
+        _fold_in_prefilter(summary, {"raw_in": 4, "skipped": {"stale": 4}}, run_ids={"j_a"})
+        self.assertEqual(summary["rejected_jobs"], 4)
+
+    def test_passing_every_hit_to_run_cannot_inflate_the_funnel(self):
+        # End to end on the real fixture: prefilter the raw hits, then hand `run` ALL of them anyway.
+        from jobhunt.cli import prefilter
+        from jobhunt.profile import load_profile
+        import copy
+        full = json.loads(FIXTURE.read_text(encoding="utf-8"))["candidates"]
+        profile = load_profile()
+        need = prefilter(profile, copy.deepcopy(full), [], date(2026, 10, 5))
+        with tempfile.TemporaryDirectory() as tmp:
+            need_path = Path(tmp) / "need.json"
+            need_path.write_text(json.dumps(need))
+            outs = {}
+            for label, candidates in (("everything", full), ("only fetch", need["fetch"])):
+                cand_path = Path(tmp) / f"{label}.json"
+                cand_path.write_text(json.dumps(candidates))
+                out = Path(tmp) / label.replace(" ", "_")
+                with contextlib.redirect_stdout(io.StringIO()):
+                    main(["run", "--candidates", str(cand_path), "--prefilter", str(need_path), "--out", str(out),
+                          "--today", "2026-10-05"])
+                outs[label] = json.loads((out / "summary.json").read_text())
+        # Every distinct job lands in exactly one bucket: 19 raw hits minus 2 duplicates is 17 jobs.
+        distinct_jobs = need["raw_in"] - need["skipped"]["duplicate"]
+        for label, s in outs.items():
+            seen_jobs = s["already_seen"] + s["rejected_jobs"] + s["below_threshold"] + s["new_shortlisted"]
+            self.assertEqual(seen_jobs, distinct_jobs, f"{label}: a job was counted twice or not at all")
+        # The shortlist is the same either way.
+        self.assertEqual(outs["everything"]["new_shortlisted"], outs["only fetch"]["new_shortlisted"])
+
     def test_cli_applies_it(self):
         with tempfile.TemporaryDirectory() as tmp:
             need = Path(tmp) / "need.json"

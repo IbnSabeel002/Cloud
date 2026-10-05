@@ -130,7 +130,7 @@ If Firecrawl tools exist, use `firecrawl_search` (domain-filtered to bayt.com, g
    ```
    `need.json` holds `fetch` (worth opening), `overflow`, and `skipped` (why the rest were dropped). In a live test it cut 68 hits to 13.
 3. For each entry in `fetch` call `get_job_details` (Indeed) or `fetch_content` (other URLs). Fill in `description`, `pay_text`, `pay_source`, `level_label`, `years_required`, `languages_required`, `job_type`, `apply_method`, `apply_email`, `scope_items`, `visa_info`, `gender_restricted`, `extra_flags`.
-4. Save the completed list, plus any hits that need no details, as `$RUN/candidates.json`.
+4. Save the completed `fetch` entries as `$RUN/candidates.json`: the entries of `need.json`'s `fetch` list, with the fields above filled in, and nothing else. **Do not add the hits listed under `skipped` or `overflow`.** The prefilter has already decided them and `run` counts them from `need.json`. (If you add them anyway, `run` still counts each job once, but the file is bigger and slower to read.)
 
 | Field | Value |
 |---|---|

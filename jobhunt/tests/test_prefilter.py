@@ -67,6 +67,17 @@ class PrefilterTests(unittest.TestCase):
         self.assertNotIn("AI Influencer Marketer", self.titles(again))
         self.assertNotIn("Lead Graphic, Motion Graphics & AI Video Specialist", self.titles(again))
 
+    def test_every_skipped_job_is_listed_by_id_so_it_is_counted_once(self):
+        ids = self.result["skipped_ids"]
+        for reason in ("stale", "junior_level", "off_target_title"):
+            self.assertEqual(len(ids[reason]), self.result["skipped"][reason], reason)
+        flat = [i for group in ids.values() for i in group]
+        self.assertEqual(len(flat), len(set(flat)), "a job must be dropped for one reason only")
+        self.assertTrue(all(i.startswith("j_") for i in flat))
+        # duplicates and invalid records are not jobs, so they have no ids
+        self.assertNotIn("duplicate", ids)
+        self.assertNotIn("invalid", ids)
+
     def test_invalid_entries_are_counted_not_fatal(self):
         result = prefilter(self.profile, raw_search_hits() + [{"title": "no company"}], [], TODAY)
         self.assertEqual(result["skipped"]["invalid"], 1)
