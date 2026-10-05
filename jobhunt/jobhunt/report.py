@@ -51,8 +51,9 @@ _MARKUP = re.compile(r"[\[\]<>`|\\]")
 _SAFE_URL = re.compile(r"^https://[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)+(?::\d+)?(?:[/?#][^\s()<>\[\]`\"'\\|]*)?$")
 
 # Steps whose absence from the health list means the run skipped them (a run that never read the settings looked
-# healthy). A name must appear in the health file, ok or not.
-REQUIRED_SOURCES = ("Settings", "Tracker write")
+# healthy; a run that skipped Gmail "to keep it short" would have looked like a quick one). A name must appear in the
+# health file, ok or not. The playbook pins these exact names in section 4.
+REQUIRED_SOURCES = ("Settings", "Indeed connector", "Tiny Fish pages", "Gmail alerts", "Tracker write")
 
 
 def _plain(text, limit: int = 120) -> str:

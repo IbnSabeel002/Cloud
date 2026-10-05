@@ -6,12 +6,13 @@ from pathlib import Path
 from jobhunt.cli import pipeline
 from jobhunt.profile import load_profile
 from jobhunt.report import (
-    _plain, _safe_url, digest_chunks, flag_label, reason_label, render_report_html, render_report_md,
+    REQUIRED_SOURCES, _plain, _safe_url, digest_chunks, flag_label, reason_label, render_report_html, render_report_md,
 )
 
 FIXTURE = Path(__file__).parent / "fixtures" / "candidates_2026-10-05.json"
 TODAY = date(2026, 10, 5)
-HEALTHY = [{"source": "Settings", "ok": True}, {"source": "Indeed", "ok": True}, {"source": "Tiny Fish", "ok": True},
+HEALTHY = [{"source": "Settings", "ok": True}, {"source": "Indeed connector", "ok": True},
+           {"source": "Tiny Fish pages", "ok": True}, {"source": "Gmail alerts", "ok": True},
            {"source": "Tracker write", "ok": True}]
 
 
@@ -34,7 +35,7 @@ class DigestTests(unittest.TestCase):
         text = self.digest()
         self.assertIn("Mon 05 Oct 2026", text)
         self.assertIn("day 1", text)
-        self.assertIn("✅ Settings · ✅ Indeed · ✅ Tiny Fish · ✅ Tracker write", text)
+        self.assertIn("✅ Settings · ✅ Indeed connector · ✅ Tiny Fish pages · ✅ Gmail alerts · ✅ Tracker write", text)
         self.assertIn("**5 new** shortlisted", text)
         self.assertIn("9 screened out", text)
         self.assertNotIn("Degraded", text)
@@ -277,14 +278,30 @@ class RequiredStepsTests(unittest.TestCase):
         self.assertNotIn("Degraded", text)
 
     def test_a_failed_step_is_reported_as_failed_not_as_missing(self):
-        text, health = self.line([{"source": "Settings", "ok": False, "detail": "read failed"},
-                                  {"source": "Tracker write", "ok": True}])
+        text, health = self.line([dict(h, ok=False, detail="read failed") if h["source"] == "Settings" else h
+                                  for h in HEALTHY])
         self.assertIn("⚠️ Settings failed (read failed)", health)
         self.assertNotIn("never reported", health)
 
     def test_the_names_match_without_regard_to_case(self):
-        _, health = self.line([{"source": "settings", "ok": True}, {"source": "TRACKER WRITE", "ok": True}])
+        _, health = self.line([dict(h, source=h["source"].swapcase()) for h in HEALTHY])
         self.assertNotIn("never reported", health)
+
+    def test_every_required_source_is_checked_on_its_own(self):
+        self.assertEqual(set(REQUIRED_SOURCES), {"Settings", "Indeed connector", "Tiny Fish pages", "Gmail alerts",
+                                                 "Tracker write"})
+        for name in REQUIRED_SOURCES:
+            with self.subTest(name):
+                text, health = self.line([h for h in HEALTHY if h["source"] != name])
+                self.assertIn(f"⚠️ {name} never reported", health)
+                self.assertEqual(health.count("never reported"), 1)
+                self.assertIn("Degraded run", text)
+
+    def test_a_source_recorded_as_skipped_is_a_warning_with_its_reason(self):
+        text, health = self.line([dict(h, ok=False, detail="not checked this run (skipped to keep the run short)")
+                                  if h["source"] == "Gmail alerts" else h for h in HEALTHY])
+        self.assertIn("⚠️ Gmail alerts failed (not checked this run (skipped to keep the run short))", health)
+        self.assertIn("Degraded run", text)
 
     def test_the_playbook_line_appears_when_given_and_not_otherwise(self):
         args = (self.r.summary, self.r.shortlist, HEALTHY, None, None, TODAY)

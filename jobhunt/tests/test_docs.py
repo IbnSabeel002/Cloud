@@ -264,6 +264,27 @@ class PlaybookTests(unittest.TestCase):
     def test_stateless_fallback_is_documented(self):
         self.assertIn("stateless", PLAYBOOK)
         self.assertIn("tracker unavailable", PLAYBOOK)
+        self.assertIn("record `Tracker write` as `ok: false", PLAYBOOK)
+
+    def test_the_playbook_pins_every_required_health_name(self):
+        # The digest warns "<name> never reported" by exact name, so the playbook must tell the run to use it.
+        from jobhunt.report import REQUIRED_SOURCES
+        for name in REQUIRED_SOURCES:
+            self.assertIn(f"`{name}`", PLAYBOOK, name)
+        self.assertIn("Use exactly these names", PLAYBOOK)
+
+    def test_a_source_is_never_skipped_to_save_time(self):
+        # The first dispatcher canary skipped Gmail and the Tiny Fish pages "to keep the run short" and finished in 2 minutes.
+        rule = PLAYBOOK.split("**Run every source in 4.1, 4.2 and 4.3.")[1].split("\n\n")[0]
+        self.assertIn("Never skip one to save time, effort or tokens", PLAYBOOK)
+        for reason in ("(1) the tool returned an error", "(2) the tool does not exist in this session",
+                       "(3) the 40-minute limit"):
+            self.assertIn(reason, rule)
+        self.assertIn("are not reasons", rule)
+        self.assertIn('"Skipped to keep the run short"', rule)
+
+    def test_the_budget_numbers_are_ceilings_not_targets(self):
+        self.assertIn("ceilings, not targets", PLAYBOOK.split("## 12. Budget per run")[1])
 
     def test_stop_path_is_documented_in_both_docs(self):
         for doc in (PLAYBOOK, README):

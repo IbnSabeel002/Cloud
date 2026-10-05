@@ -84,11 +84,15 @@ ArtifactData(action="list", url=TRACKER_URL, collection="jobs", query={"limit": 
 - This writes `$RUN/db/jobs/<job id>.json`. **Keep the text of the result**: it lists each document with its `version`, and you need those numbers in section 8.
 - An empty collection (the first run, or a fresh start) writes no files and is normal. `--db-dir $RUN/db` still works.
 - Do not use Drive Sheets or Docs as memory. Their text read-back drops rows past about 115 and shortens cells to `...`. The database does not.
-- If `ArtifactData` is not available in this session, do not guess. Run **stateless**: skip every database step, treat all jobs as new, and say in the digest `tracker unavailable: repeats are possible today`. In a stateless run create no Gmail drafts and say `drafts skipped: tracker unavailable`, so the same employers do not get a draft every day.
+- If `ArtifactData` is not available in this session, do not guess. Run **stateless**: skip every database step, treat all jobs as new, and say in the digest `tracker unavailable: repeats are possible today`. In a stateless run record `Tracker write` as `ok: false, detail: "tracker unavailable"`, create no Gmail drafts and say `drafts skipped: tracker unavailable`, so the same employers do not get a draft every day.
 
 ## 4. Source
 
 Record each source in `$RUN/health.json` as `{"source": "...", "ok": true|false, "detail": "..."}`. A source that errors is `ok: false` with the reason. Keep going.
+
+**Use exactly these names.** The digest warns `<name> never reported` for any of them that is missing, and marks the run degraded: `Settings` (section 3), `Indeed connector` (4.1), `Tiny Fish pages` (4.2), `Gmail alerts` (4.3) and `Tracker write` (section 8). Firecrawl (4.4) is optional and is not on the list.
+
+**Run every source in 4.1, 4.2 and 4.3. Never skip one to save time, effort or tokens.** A source may be recorded as not run for exactly three reasons, and the `detail` must say which: (1) the tool returned an error (quote its first line, with no links); (2) the tool does not exist in this session even after ToolSearch (say so); (3) the 40-minute limit in the prompt has passed (give the minutes). "Skipped to keep the run short" and "not needed today" are not reasons. A run that finishes in a few minutes has probably skipped something it should have done.
 
 ### 4.1 Indeed connector (`search_jobs`, then `get_job_details`)
 
@@ -265,4 +269,4 @@ You never decide a job is "good enough". Only the user does, by setting a job to
 
 ## 12. Budget per run
 
-Indeed: at most 10 searches and 25 job-detail calls. Tiny Fish fetch: at most 12 URLs. Tiny Fish `run_web_automation`: at most 3. Firecrawl: at most 12 calls. Deep dives: only `"outreach": true` entries (at most 5). Do not exceed these. Overflow is reported, not fetched.
+Indeed: at most 10 searches and 25 job-detail calls. Tiny Fish fetch: at most 12 URLs. Tiny Fish `run_web_automation`: at most 3. Firecrawl: at most 12 calls. Deep dives: only `"outreach": true` entries (at most 5). These are ceilings, not targets: do not exceed them, and do not stay far under them to finish early. Overflow is reported, not fetched.
