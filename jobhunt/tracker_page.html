@@ -1,0 +1,312 @@
+<title>Job Hunt Tracker</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=Public+Sans:wght@400;500;600;700&display=swap">
+<style>
+/* Layout: one column. Summary strip first (last run, source health, counts), then status filters,
+   then one row per job ordered by what needs attention: interviews, offers, applications, the shortlist by score. */
+:root {
+  --bg: #F2F5F7; --surface: #FFFFFF; --ink: #15212A; --muted: #566874; --line: #D8E0E6;
+  --accent: #0B6E86; --accent-ink: #FFFFFF; --chip: #E8EEF2; --focus: #0B6E86;
+  --tier-a: #17753F; --tier-b: #2A66A8; --tier-c: #9A6200; --tier-u: #5E6B75;
+  --good: #17753F; --warn: #9A6200; --bad: #B3261E;
+  --font-body: "Public Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-data: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0E151A; --surface: #161F26; --ink: #E5ECF0; --muted: #8FA1AC; --line: #25323B;
+    --accent: #4DB4CE; --accent-ink: #06222B; --chip: #202C34; --focus: #4DB4CE;
+    --tier-a: #5CC98A; --tier-b: #6FA8E8; --tier-c: #E0A83C; --tier-u: #9AA8B2;
+    --good: #5CC98A; --warn: #E0A83C; --bad: #F2877F; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0E151A; --surface: #161F26; --ink: #E5ECF0; --muted: #8FA1AC; --line: #25323B;
+  --accent: #4DB4CE; --accent-ink: #06222B; --chip: #202C34; --focus: #4DB4CE;
+  --tier-a: #5CC98A; --tier-b: #6FA8E8; --tier-c: #E0A83C; --tier-u: #9AA8B2;
+  --good: #5CC98A; --warn: #E0A83C; --bad: #F2877F; color-scheme: dark;
+}
+body { background: var(--bg); color: var(--ink); font-family: var(--font-body); font-size: 15px; line-height: 1.45; padding-inline: 16px; padding-block: 24px 48px; }
+.wrap { max-width: 920px; margin-inline: auto; display: grid; gap: 20px; }
+h1 { font-size: 1.5rem; line-height: 1.2; margin: 0; letter-spacing: -0.01em; text-wrap: balance; }
+a { color: var(--accent); }
+:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.sub { color: var(--muted); margin: 4px 0 0; font-size: 0.9rem; }
+.num { font-family: var(--font-data); font-variant-numeric: tabular-nums; }
+
+.summary { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; display: grid; gap: 10px; }
+.run-line { display: flex; flex-wrap: wrap; gap: 6px 18px; align-items: baseline; }
+.stat b { font-family: var(--font-data); font-weight: 500; font-size: 1.15rem; margin-right: 4px; }
+.stat span { color: var(--muted); font-size: 0.85rem; }
+.health { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: 0.85rem; color: var(--muted); }
+.health .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; background: var(--good); }
+.health .bad .dot { background: var(--warn); }
+.health .bad { color: var(--warn); }
+.banner { border: 1px solid var(--good); color: var(--good); border-radius: 8px; padding: 10px 14px; font-weight: 500; }
+
+.filters { display: flex; flex-wrap: wrap; gap: 8px; }
+.filters button { font: inherit; font-size: 0.85rem; background: var(--chip); color: var(--ink); border: 1px solid transparent; border-radius: 999px; padding: 6px 12px; cursor: pointer; }
+.filters button[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); }
+.filters .count { font-family: var(--font-data); margin-left: 6px; opacity: 0.8; }
+
+.list { display: grid; gap: 10px; }
+.job { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; display: grid; gap: 10px; grid-template-columns: 56px minmax(0, 1fr); }
+.score { font-family: var(--font-data); font-size: 1.6rem; font-weight: 500; line-height: 1; padding-top: 2px; }
+.score small { display: block; font-size: 0.65rem; color: var(--muted); letter-spacing: 0.06em; text-transform: uppercase; margin-top: 4px; }
+.main { min-width: 0; display: grid; gap: 8px; }
+.head { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 6px 16px; }
+.title { font-weight: 600; font-size: 1rem; overflow-wrap: anywhere; }
+.company { color: var(--muted); font-size: 0.9rem; overflow-wrap: anywhere; }
+.pay { text-align: right; font-size: 0.85rem; }
+.pay .amt { font-family: var(--font-data); font-weight: 500; }
+.pay .src { color: var(--muted); }
+.tier { display: inline-block; font-family: var(--font-data); font-size: 0.75rem; font-weight: 500; border: 1px solid currentColor; border-radius: 4px; padding: 1px 6px; margin-right: 8px; }
+.tier-A { color: var(--tier-a); } .tier-B { color: var(--tier-b); } .tier-C { color: var(--tier-c); } .tier-U { color: var(--tier-u); }
+.flags { display: flex; flex-wrap: wrap; gap: 6px; }
+.flags span { font-size: 0.78rem; background: var(--chip); border-radius: 4px; padding: 2px 8px; color: var(--muted); }
+.flags span.warn { color: var(--warn); }
+.edit { display: grid; gap: 10px; grid-template-columns: 150px minmax(0, 1fr); align-items: start; }
+.edit label { display: grid; gap: 4px; font-size: 0.72rem; color: var(--muted); letter-spacing: 0.04em; text-transform: uppercase; min-width: 0; }
+select, textarea { font: inherit; font-size: 0.9rem; color: var(--ink); background: var(--bg); border: 1px solid var(--line); border-radius: 6px; padding: 7px 9px; width: 100%; box-sizing: border-box; }
+textarea { resize: vertical; min-height: 36px; }
+.meta { color: var(--muted); font-size: 0.78rem; }
+.empty { background: var(--surface); border: 1px dashed var(--line); border-radius: 10px; padding: 28px 20px; text-align: center; color: var(--muted); }
+.empty b { color: var(--ink); display: block; margin-bottom: 6px; }
+.toast { font-size: 0.85rem; color: var(--bad); }
+.toast:empty { display: none; }
+@media (max-width: 560px) {
+  .job { grid-template-columns: minmax(0, 1fr); }
+  .score { display: flex; align-items: baseline; gap: 8px; }
+  .score small { margin: 0; }
+  .pay { text-align: left; }
+  .edit { grid-template-columns: minmax(0, 1fr); }
+}
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+
+<main class="wrap">
+  <header>
+    <h1>Job Hunt Tracker</h1>
+    <p class="sub">Dubai roles found by the daily agent. Change a status or add a note and the agent keeps it.</p>
+  </header>
+
+  <section class="summary" aria-label="Last run">
+    <div class="run-line" id="run-line"><span class="sub">No run recorded yet.</span></div>
+    <div class="health" id="health" hidden></div>
+  </section>
+
+  <div id="banner" class="banner" hidden>A job is marked Accepted. The daily agent stops itself on its next run.</div>
+
+  <nav class="filters" id="filters" aria-label="Filter by status"></nav>
+  <div class="toast" id="toast" role="status"></div>
+  <section class="list" id="list" aria-label="Jobs"></section>
+</main>
+
+<script>
+(function () {
+  "use strict";
+  var STATUSES = ["Shortlisted", "Applied", "Interview", "Offer", "Accepted", "Rejected", "Dead"];
+  var ORDER = { Interview: 0, Offer: 1, Applied: 2, Shortlisted: 3, Accepted: 4, Rejected: 5, Dead: 6 };
+  var FLAG_LABELS = {
+    no_date: "no posting date", pay_unlisted: "pay not listed", pay_estimate: "pay is an estimate",
+    pay_straddles_floor: "range dips below your floor", pay_min_below_floor: "advertised minimum is under your floor",
+    visa_not_stated: "visa not stated", gender_restricted: "gender-restricted post", contract: "contract",
+    no_jd: "no job description captured", junior_title: "junior-sounding title", free_email_apply: "applies via free email",
+    scope_bloat: "3 jobs in 1", employer_hidden: "employer hidden", off_target_title: "off-target title",
+    watchlist_company: "on your watchlist", engineering_role: "engineering title", employer_mismatch: "employer name differs from the job text",
+    prompt_injection_attempt: "post tried to give the agent instructions", heavy_overtime: "heavy overtime",
+    asks_current_salary: "asks your current salary", arabic_required: "Arabic required", arabic_native_required: "native Arabic required",
+    emirati_preferred: "Emirati preferred", "language:arabic": "Arabic required"
+  };
+  var WARN = { pay_min_below_floor: 1, employer_mismatch: 1, prompt_injection_attempt: 1, heavy_overtime: 1, asks_current_salary: 1, engineering_role: 1, scope_bloat: 1, free_email_apply: 1 };
+
+  var db = null, jobs = new Map(), cards = new Map(), writing = new Map(), filter = "active", lastRun = null;
+  var $ = function (id) { return document.getElementById(id); };
+
+  function flagLabel(f) {
+    if (FLAG_LABELS[f]) return FLAG_LABELS[f];
+    if (f.indexOf("title_says:") === 0) return "title says " + f.slice(11).replace(/_/g, " ");
+    return f.replace(/_/g, " ");
+  }
+  function dayLabel(iso) {
+    var m = /^(\d{4})-(\d{2})-(\d{2})/.exec(iso || "");
+    if (!m) return iso || "";
+    var mon = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"][+m[2] - 1];
+    return (+m[3]) + " " + mon;
+  }
+  function toast(msg) { $("toast").textContent = msg || ""; }
+  function el(tag, cls, text) { var n = document.createElement(tag); if (cls) n.className = cls; if (text != null) n.textContent = text; return n; }
+
+  function save(id, patch) {
+    var prev = writing.get(id) || Promise.resolve();
+    var next = prev.then(function () { return db.doc("jobs/" + id).update(patch); });
+    writing.set(id, next.catch(function () {}));
+    return next;
+  }
+
+  function createCard(id) {
+    var c = { id: id };
+    c.root = el("article", "job");
+    c.score = el("div", "score num");
+    c.scoreNum = el("span"); c.score.appendChild(c.scoreNum); c.score.appendChild(el("small", null, "score"));
+    c.main = el("div", "main");
+    var head = el("div", "head");
+    var left = el("div");
+    c.title = el("div", "title"); c.titleLink = el("a"); c.titleLink.target = "_blank"; c.titleLink.rel = "noopener noreferrer";
+    c.company = el("div", "company");
+    left.appendChild(c.title); left.appendChild(c.company);
+    c.pay = el("div", "pay"); c.tier = el("span", "tier"); c.amt = el("span", "amt"); c.src = el("span", "src");
+    c.pay.appendChild(c.tier); c.pay.appendChild(c.amt); c.pay.appendChild(document.createElement("br")); c.pay.appendChild(c.src);
+    head.appendChild(left); head.appendChild(c.pay);
+    c.flags = el("div", "flags");
+    var edit = el("div", "edit");
+    var sl = el("label", null, "Status"); c.sel = el("select"); c.sel.id = "status-" + id;
+    STATUSES.forEach(function (s) { var o = el("option", null, s); o.value = s; c.sel.appendChild(o); });
+    sl.appendChild(c.sel);
+    var nl = el("label", null, "Notes"); c.notes = el("textarea"); c.notes.id = "notes-" + id; c.notes.rows = 1; c.notes.placeholder = "Contact, date sent, next step";
+    nl.appendChild(c.notes);
+    edit.appendChild(sl); edit.appendChild(nl);
+    c.meta = el("div", "meta");
+    c.main.appendChild(head); c.main.appendChild(c.flags); c.main.appendChild(edit); c.main.appendChild(c.meta);
+    c.root.appendChild(c.score); c.root.appendChild(c.main);
+
+    c.sel.addEventListener("change", function () {
+      var v = c.sel.value, d = jobs.get(id) || {};
+      toast("");
+      save(id, { Status: v }).catch(function (e) {
+        c.sel.value = d.Status || "Shortlisted";
+        toast("Could not save the status (" + ((e && e.code) || "error") + "). Try again.");
+      });
+    });
+    c.notes.addEventListener("blur", function () {
+      var d = jobs.get(id) || {};
+      if (c.notes.value === (d.Notes || "")) return;
+      toast("");
+      save(id, { Notes: c.notes.value }).catch(function (e) {
+        toast("Could not save the note (" + ((e && e.code) || "error") + ").");
+      });
+    });
+    return c;
+  }
+
+  function updateCard(c, d) {
+    c.scoreNum.textContent = d.Score != null && d.Score !== "" ? String(Math.round(Number(d.Score))) : "–";
+    c.titleLink.textContent = d.Title || "Untitled role";
+    var url = String(d.URL || "");
+    if (/^https:\/\//.test(url)) { c.titleLink.href = url; if (!c.titleLink.parentNode) { c.title.textContent = ""; c.title.appendChild(c.titleLink); } }
+    else { c.title.textContent = d.Title || "Untitled role"; }
+    c.company.textContent = d.Company || "";
+    var tier = d.Tier || "U";
+    c.tier.textContent = tier; c.tier.className = "tier tier-" + tier;
+    c.amt.textContent = d.Pay || "pay not listed";
+    c.src.textContent = d.Pay && d.Pay !== "not listed" ? "source: " + (d.PaySource || "unknown") : "";
+    var flags = String(d.Flags || "").split(";").filter(Boolean);
+    c.flags.textContent = "";
+    flags.forEach(function (f) { c.flags.appendChild(el("span", WARN[f] ? "warn" : "", flagLabel(f))); });
+    c.flags.hidden = flags.length === 0;
+    if (document.activeElement !== c.sel) c.sel.value = STATUSES.indexOf(d.Status) >= 0 ? d.Status : "Shortlisted";
+    if (document.activeElement !== c.notes) c.notes.value = d.Notes || "";
+    c.meta.textContent = [d.Source ? "via " + d.Source : "", d.FirstSeen ? "first seen " + dayLabel(d.FirstSeen) : ""].filter(Boolean).join(" · ");
+  }
+
+  function visible(d) {
+    if (filter === "all") return true;
+    if (filter === "active") return d.Status !== "Rejected" && d.Status !== "Dead";
+    return d.Status === filter;
+  }
+  function sorter(a, b) {
+    var oa = ORDER[a.d.Status] != null ? ORDER[a.d.Status] : 3, ob = ORDER[b.d.Status] != null ? ORDER[b.d.Status] : 3;
+    if (oa !== ob) return oa - ob;
+    var sa = Number(a.d.Score) || 0, sb = Number(b.d.Score) || 0;
+    if (sa !== sb) return sb - sa;
+    return String(b.d.FirstSeen || "").localeCompare(String(a.d.FirstSeen || ""));
+  }
+
+  function renderFilters() {
+    var counts = { active: 0, all: jobs.size };
+    STATUSES.forEach(function (s) { counts[s] = 0; });
+    jobs.forEach(function (d) {
+      if (counts[d.Status] != null) counts[d.Status]++;
+      if (d.Status !== "Rejected" && d.Status !== "Dead") counts.active++;
+    });
+    var box = $("filters");
+    box.textContent = "";
+    [["active", "Active"], ["Applied", "Applied"], ["Interview", "Interview"], ["Offer", "Offer"], ["Rejected", "Rejected"], ["all", "All"]].forEach(function (p) {
+      var b = el("button", null, p[1]); b.type = "button"; b.id = "filter-" + p[0];
+      b.setAttribute("aria-pressed", filter === p[0] ? "true" : "false");
+      b.appendChild(el("span", "count", String(counts[p[0]] || 0)));
+      b.addEventListener("click", function () { filter = p[0]; render(); });
+      box.appendChild(b);
+    });
+    $("banner").hidden = !counts.Accepted;
+  }
+
+  function render() {
+    renderFilters();
+    var rows = [];
+    jobs.forEach(function (d, id) { if (visible(d)) rows.push({ id: id, d: d }); });
+    rows.sort(sorter);
+    var list = $("list");
+    var keep = new Set(rows.map(function (r) { return r.id; }));
+    cards.forEach(function (c, id) { if (!keep.has(id)) { if (c.root.parentNode) c.root.parentNode.removeChild(c.root); } });
+    var typing = list.contains(document.activeElement);
+    var empty = list.querySelector(".empty");
+    if (empty) empty.remove();
+    if (!rows.length) {
+      var e = el("div", "empty");
+      e.appendChild(el("b", null, jobs.size ? "Nothing in this view." : "No jobs yet."));
+      e.appendChild(document.createTextNode(jobs.size ? "Pick another filter above." : "The first daily run fills this list, usually before 8 am Dubai time."));
+      list.appendChild(e);
+      return;
+    }
+    rows.forEach(function (r, i) {
+      var c = cards.get(r.id);
+      if (!c) { c = createCard(r.id); cards.set(r.id, c); }
+      updateCard(c, r.d);
+      if (!typing && list.children[i] !== c.root) list.insertBefore(c.root, list.children[i] || null);
+      else if (!c.root.parentNode) list.appendChild(c.root);
+    });
+  }
+
+  function renderRun() {
+    var line = $("run-line"), health = $("health");
+    line.textContent = ""; health.textContent = "";
+    if (!lastRun) { line.appendChild(el("span", "sub", "No run recorded yet.")); health.hidden = true; return; }
+    var r = lastRun;
+    function stat(n, label) { var s = el("div", "stat"); s.appendChild(el("b", null, String(n == null ? 0 : n))); s.appendChild(el("span", null, label)); return s; }
+    var when = el("div", "stat"); when.appendChild(el("b", null, dayLabel(r.Date))); when.appendChild(el("span", null, r.HuntDay ? "last run, day " + r.HuntDay : "last run"));
+    line.appendChild(when);
+    line.appendChild(stat(r.NewShortlisted, "new"));
+    line.appendChild(stat(r.AlreadySeen, "already seen"));
+    line.appendChild(stat(r.BelowThreshold, "weak matches"));
+    line.appendChild(stat(r.Screened, "screened out"));
+    var h = Array.isArray(r.Health) ? r.Health : [];
+    health.hidden = h.length === 0;
+    h.forEach(function (x) {
+      var s = el("span", x.ok ? "" : "bad"); s.appendChild(el("i", "dot"));
+      s.appendChild(document.createTextNode(x.source + (x.ok ? "" : " failed" + (x.detail ? ": " + x.detail : ""))));
+      health.appendChild(s);
+    });
+    if (r.ReportUrl && /^https:\/\//.test(r.ReportUrl)) {
+      var a = el("a", null, "Open the full report"); a.href = r.ReportUrl; a.target = "_blank"; a.rel = "noopener noreferrer";
+      var wrap = el("span"); wrap.appendChild(a); health.appendChild(wrap); health.hidden = false;
+    }
+  }
+
+  async function init() {
+    renderFilters(); render(); renderRun();
+    db = await window.claude.use("db");
+    if (!db) { toast("Open this page while signed in to claude.ai to see your jobs."); return; }
+    db.collection("jobs").limit(1000).onSnapshot(function (snap) {
+      var next = new Map();
+      snap.docs.forEach(function (doc) { next.set(doc.id, doc.data()); });
+      jobs = next; render();
+    }, function () { toast("Could not load jobs. Reload the page."); });
+    db.collection("runs").orderBy("Date", "desc").limit(1).onSnapshot(function (snap) {
+      lastRun = snap.docs.length ? snap.docs[0].data() : null; renderRun();
+    }, function () {});
+  }
+  init().catch(function () { toast("Could not start. Reload the page."); });
+})();
+</script>

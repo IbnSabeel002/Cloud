@@ -1,0 +1,181 @@
+{
+  "_provenance": "Listing metadata (title, company, pay, level label, board) is from real Indeed AE, Bayt and Glassdoor pages read on 2026-10-05. Where the page did not show a posting date, 'posted' is approximated from the search filter used. Fields listed in each entry's _synthetic array were written for the test because the real page was not captured. Entries marked _invented are not real listings.",
+  "candidates": [
+    {
+      "_note": "Real. Indeed AE, opened job page.",
+      "source": "indeed", "source_id": "creditcare-smm", "title": "Social Media Manager",
+      "company": "CREDITCARE CREDIT MANAGEMENT LLC", "location": "Dubai", "url": "https://example.com/jobs/creditcare-smm",
+      "posted": "7 days ago", "pay_text": "AED3,500 - AED4,000 a month", "pay_source": "listing",
+      "level_label": "Fresher", "years_required": null, "languages_required": [], "job_type": "full-time",
+      "apply_method": "portal", "apply_email": null,
+      "scope_items": ["social media", "website management", "paid ads", "email marketing"],
+      "gender_restricted": false, "visa_info": "not_stated",
+      "description": "We are looking for a creative, proactive, and tech-savvy Social Media & Website Manager. Plan, create, and post daily content on Instagram, Facebook, Twitter, LinkedIn, and TikTok. Run and optimize paid ad campaigns. Update website content, manage listings, optimize for SEO. Handle basic email marketing. Basic graphic design skills (Canva, Adobe tools). Job Types: Full-time, Permanent, Fresher. Pay: AED3,500.00 - AED4,000.00 per month."
+    },
+    {
+      "_note": "Real. Bayt search page.",
+      "_synthetic": ["description"],
+      "source": "bayt", "title": "Social Media Manager", "company": "Oryan Realty", "location": "Dubai, UAE",
+      "url": "https://example.com/jobs/oryan-smm", "posted": "16 days ago",
+      "pay_text": "AED 3,673 - AED 5,509", "pay_source": "listing", "level_label": "Entry level",
+      "years_required": null, "languages_required": [], "job_type": null, "apply_method": "portal",
+      "apply_email": null, "scope_items": ["social media"], "gender_restricted": false, "visa_info": "not_stated",
+      "description": "Craft compelling content that resonates across platforms for Dubai's luxury real estate market. Engaging storytelling and a passion for luxury lifestyle."
+    },
+    {
+      "_note": "Real title, company, date. Indeed connector.",
+      "_synthetic": ["description"],
+      "source": "indeed", "source_id": "JOBSEARCH_100112", "title": "Lead Graphic, Motion Graphics & AI Video Specialist",
+      "company": "Rayqube Futrue Tech", "location": "Dubai", "url": "https://example.com/jobs/rayqube-ai-video",
+      "posted": "Posted on: September 29, 2026", "pay_text": null, "pay_source": null, "level_label": null,
+      "years_required": null, "languages_required": ["English"], "job_type": "full-time", "apply_method": "portal",
+      "apply_email": null, "scope_items": ["graphic design", "motion graphics", "ai video"],
+      "gender_restricted": false, "visa_info": "not_stated",
+      "description": "Lead our creative output across graphics, motion graphics and AI video. You will generate cinematic AI video with Kling, Veo and Runway, build repeatable ComfyUI workflows, and finish in After Effects and Premiere. Prompt engineering for Midjourney and Stable Diffusion. Report on content performance in Google Analytics."
+    },
+    {
+      "_note": "Real title, company, date. Indeed connector.",
+      "_synthetic": ["description"],
+      "source": "indeed", "source_id": "JOBSEARCH_100100", "title": "Senior Social Media Manager (Global) - Dubai",
+      "company": "Sokin", "location": "Dubai", "url": "https://example.com/jobs/sokin-ssmm",
+      "posted": "Posted on: September 23, 2026", "pay_text": null, "pay_source": null, "level_label": null,
+      "years_required": null, "languages_required": [], "job_type": "full-time", "apply_method": "portal",
+      "apply_email": null, "scope_items": ["social media"], "gender_restricted": false, "visa_info": "not_stated",
+      "description": "Own our global social presence."
+    },
+    {
+      "_note": "Real title, company, date. Indeed connector.",
+      "_synthetic": ["description"],
+      "source": "indeed", "source_id": "JOBSEARCH_100110", "title": "AI Influencer Marketer",
+      "company": "Trade Quo Global Ltd", "location": "Dubai", "url": "https://example.com/jobs/tradequo-ai-influencer",
+      "posted": "Posted on: September 27, 2026", "pay_text": null, "pay_source": null, "level_label": null,
+      "years_required": null, "languages_required": ["English"], "job_type": "full-time", "apply_method": "portal",
+      "apply_email": null, "scope_items": ["ai influencer", "social media"], "gender_restricted": false, "visa_info": "not_stated",
+      "description": "Build and run AI influencer accounts on Instagram and TikTok. Generate characters and short video with Midjourney, Kling and Higgsfield, schedule with a content calendar, and track growth in analytics. Prompt design and automation with n8n is a plus."
+    },
+    {
+      "_note": "Real title, company, date. Indeed connector.",
+      "source": "indeed", "source_id": "JOBSEARCH_100099", "title": "Senior Social Media Manager - French Fluent",
+      "company": "Paradox", "location": "Dubai", "url": "https://example.com/jobs/paradox-ssmm-fr",
+      "posted": "Posted on: July 21, 2026", "pay_text": null, "pay_source": null, "level_label": null,
+      "years_required": null, "languages_required": ["French"], "job_type": "full-time", "apply_method": "portal",
+      "apply_email": null, "scope_items": ["social media"], "gender_restricted": false, "visa_info": "not_stated",
+      "description": "Fluent French is required for this senior social media role."
+    },
+    {
+      "_note": "Real title, company, date. Indeed connector.",
+      "source": "indeed", "source_id": "JOBSEARCH_100103",
+      "title": "Creator Network Partner Growth & Incubation Manager - TikTok LIVE - Dubai (Chinese Speaking)",
+      "company": "TikTok", "location": "Dubai", "url": "https://example.com/jobs/tiktok-creator-network",
+      "posted": "Posted on: February 27, 2026", "pay_text": null, "pay_source": null, "level_label": null,
+      "years_required": null, "languages_required": ["Chinese"], "job_type": null, "apply_method": "portal",
+      "apply_email": null, "scope_items": [], "gender_restricted": false, "visa_info": "not_stated", "description": ""
+    },
+    {
+      "_note": "Real title, company, date. Indeed connector.",
+      "source": "indeed", "source_id": "JOBSEARCH_100109", "title": "Social Media & Digital Content Specialist (Onsite - Dubai)",
+      "company": "Mirror Booth LLC", "location": "Dubai", "url": "https://example.com/jobs/mirrorbooth-smdcs",
+      "posted": "Posted on: September 05, 2026", "pay_text": null, "pay_source": null, "level_label": null,
+      "years_required": null, "languages_required": [], "job_type": "full-time", "apply_method": "portal",
+      "apply_email": null, "scope_items": ["social media", "content"], "gender_restricted": false, "visa_info": "not_stated",
+      "description": ""
+    },
+    {
+      "_note": "Real. Glassdoor snippet: AED 10,000 employer provided, 6+ years, AI-assisted production; Indeed AE: hands-on paid social budgets.",
+      "_synthetic": ["posted", "description"],
+      "source": "indeed", "title": "Social Media and Marketing Manager", "company": "Azya Consulting FZ LLE",
+      "location": "Dubai", "url": "https://example.com/jobs/azya-smmm", "posted": "3 days ago",
+      "pay_text": "AED 10,000 (Employer provided)", "pay_source": "listing", "level_label": null,
+      "years_required": 6, "languages_required": ["English"], "job_type": "full-time", "apply_method": "portal",
+      "apply_email": null, "scope_items": ["social media", "paid social", "brand"], "gender_restricted": false,
+      "visa_info": "not_stated",
+      "description": "6+ years in social, brand, or digital marketing, with at least 2 at lead level. Hands-on management of paid social budgets, with results you can evidence. AI-assisted production: you will use AI tools such as Midjourney and Kling to scale creative. Meta Ads, Google Analytics, Instagram, TikTok and LinkedIn. Own the content calendar."
+    },
+    {
+      "_note": "Real, same job as Azya above, seen on Bayt with a different title format.",
+      "_synthetic": ["posted", "description"],
+      "source": "bayt", "title": "Social Media and Marketing Manager (Dubai)", "company": "Azya Consulting",
+      "location": "Dubai, UAE", "url": "https://example.com/jobs/azya-smmm-bayt", "posted": "4 days ago",
+      "pay_text": null, "pay_source": null, "level_label": null, "years_required": 6, "languages_required": [],
+      "job_type": null, "apply_method": "portal", "apply_email": null, "scope_items": [], "gender_restricted": false,
+      "visa_info": "not_stated", "description": "Social media and marketing manager."
+    },
+    {
+      "_note": "Real. Indeed AE search page: '3-5 years in social media, influencer marketing, or community management'.",
+      "_synthetic": ["posted", "description"],
+      "source": "indeed", "title": "Social Media Marketing Manager", "company": "washmen", "location": "Dubai",
+      "url": "https://example.com/jobs/washmen-smmm", "posted": "5 days ago", "pay_text": null, "pay_source": null,
+      "level_label": null, "years_required": 3, "languages_required": ["English"], "job_type": "full-time",
+      "apply_method": "portal", "apply_email": null, "scope_items": ["social media", "influencer"],
+      "gender_restricted": false, "visa_info": "not_stated",
+      "description": "You are a native to social media with fluent English and 3-5 years in social media, influencer marketing, or community management. Run Instagram and TikTok, plan the content calendar, brief influencers, and report on analytics. Experience with Canva, CapCut and Meta Ads."
+    },
+    {
+      "_note": "Real. Indeed AE search page.",
+      "source": "indeed", "title": "Junior Video Editor", "company": "Huda Beauty", "location": "Dubai",
+      "url": "https://example.com/jobs/huda-jve", "posted": "2 days ago", "pay_text": null, "pay_source": null,
+      "level_label": null, "years_required": 2, "languages_required": [], "job_type": "full-time",
+      "apply_method": "portal", "apply_email": null, "scope_items": ["video editing"], "gender_restricted": false,
+      "visa_info": "not_stated", "description": "1-2 years of professional video editing experience focused on social content."
+    },
+    {
+      "_note": "Real. Indeed AE search page (Arabic text: part-time / freelancer for two accounts).",
+      "source": "indeed", "title": "Content Creator & Social Media Manager", "company": "Rasmat", "location": "Dubai",
+      "url": "https://example.com/jobs/rasmat-ccsmm", "posted": "1 day ago", "pay_text": null, "pay_source": null,
+      "level_label": null, "years_required": null, "languages_required": ["Arabic"], "job_type": "freelance",
+      "apply_method": "portal", "apply_email": null, "scope_items": ["content", "social media"],
+      "gender_restricted": false, "visa_info": "not_stated", "description": "Part-time freelancer to manage two accounts."
+    },
+    {
+      "_note": "Real title, company, date. Indeed connector.",
+      "source": "indeed", "source_id": "JOBSEARCH_100101", "title": "Social Media & Digital Marketing Manager, Motorola META",
+      "company": "Lenovo", "location": "Dubai", "url": "https://example.com/jobs/lenovo-motorola",
+      "posted": "Posted on: August 11, 2026", "pay_text": null, "pay_source": null, "level_label": null,
+      "years_required": null, "languages_required": [], "job_type": "full-time", "apply_method": "portal",
+      "apply_email": null, "scope_items": ["social media", "digital marketing"], "gender_restricted": false,
+      "visa_info": "not_stated", "description": ""
+    },
+    {
+      "_note": "Real title, company, date. Indeed connector.",
+      "source": "indeed", "source_id": "JOBSEARCH_100116", "title": "AI Platform Training & Onboarding Specialist - Contact Center",
+      "company": "Concentrix", "location": "Dubai", "url": "https://example.com/jobs/concentrix-ai-training",
+      "posted": "Posted on: September 24, 2026", "pay_text": null, "pay_source": null, "level_label": null,
+      "years_required": null, "languages_required": [], "job_type": "full-time", "apply_method": "portal",
+      "apply_email": null, "scope_items": [], "gender_restricted": false, "visa_info": "not_stated", "description": ""
+    },
+    {
+      "_note": "Real title, company, date. Indeed connector.",
+      "source": "indeed", "source_id": "JOBSEARCH_100098", "title": "Off-Page SEO Specialist - Links, Placements & Media",
+      "company": "MM INTERNATIONAL TRADING FZCO", "location": "Dubai", "url": "https://example.com/jobs/mm-seo",
+      "posted": "Posted on: October 02, 2026", "pay_text": null, "pay_source": null, "level_label": null,
+      "years_required": null, "languages_required": [], "job_type": "full-time", "apply_method": "portal",
+      "apply_email": null, "scope_items": ["seo"], "gender_restricted": false, "visa_info": "not_stated", "description": ""
+    },
+    {
+      "_note": "Real. Appeared twice in one Indeed connector search (JOBSEARCH_100102).",
+      "source": "indeed", "source_id": "JOBSEARCH_100102", "title": "Marketing Manager - Brokerage & Group Support",
+      "company": "Land Sterling Property Consultants", "location": "Dubai", "url": "https://example.com/jobs/landsterling-1",
+      "posted": "Posted on: September 22, 2026", "pay_text": null, "pay_source": null, "level_label": null,
+      "years_required": null, "languages_required": [], "job_type": "full-time", "apply_method": "portal",
+      "apply_email": null, "scope_items": ["marketing"], "gender_restricted": false, "visa_info": "not_stated", "description": ""
+    },
+    {
+      "_note": "Real. Same posting, second result id (JOBSEARCH_100107).",
+      "source": "indeed", "source_id": "JOBSEARCH_100107", "title": "Marketing Manager - Brokerage & Group Support",
+      "company": "Land Sterling Property Consultants", "location": "Dubai", "url": "https://example.com/jobs/landsterling-2",
+      "posted": "Posted on: September 22, 2026", "pay_text": null, "pay_source": null, "level_label": null,
+      "years_required": null, "languages_required": [], "job_type": "full-time", "apply_method": "portal",
+      "apply_email": null, "scope_items": ["marketing"], "gender_restricted": false, "visa_info": "not_stated", "description": ""
+    },
+    {
+      "_note": "INVENTED to exercise the scam rules. Not a real company or listing.",
+      "_invented": true,
+      "source": "other", "title": "Social Media Manager", "company": "Global Reach Marketing", "location": "Dubai",
+      "url": "https://example.com/jobs/invented-scam", "posted": "Today", "pay_text": "AED 9,000", "pay_source": "listing",
+      "level_label": null, "years_required": 3, "languages_required": [], "job_type": "full-time",
+      "apply_method": "whatsapp", "apply_email": null, "scope_items": ["social media"], "gender_restricted": false,
+      "visa_info": "not_stated",
+      "description": "Easy high-paying job. Send your CV on WhatsApp. A refundable registration fee of AED 500 is required to secure your visa slot."
+    }
+  ]
+}
