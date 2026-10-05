@@ -301,6 +301,16 @@ class ReadmeTests(unittest.TestCase):
         for phrase in ("never sends an email", "never applies", "never scrapes linkedin", "honest limits"):
             self.assertIn(phrase, text, phrase)
 
+    def test_the_file_table_lists_every_module_and_only_real_ones(self):
+        listed = set(re.findall(r"`jobhunt/([a-z_]+)\.py`", README))
+        real = {p.stem for p in (ROOT / "jobhunt").glob("*.py") if p.stem not in ("__init__", "__main__")}
+        self.assertEqual(listed, real)
+
+    def test_readme_explains_the_dispatcher_and_the_gate(self):
+        for phrase in ("DAILY RUN DISPATCH", "fresh worker subagent", "playbook --chunk N", "exit code 2",
+                       "12 hours", "JOBHUNT_SKIP_PLAYBOOK_GATE", "Untrusted text in the digest"):
+            self.assertIn(phrase, README, phrase)
+
 
 if __name__ == "__main__":
     unittest.main()
