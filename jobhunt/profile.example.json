@@ -1,0 +1,17 @@
+{
+  "_comment": "Generic example. Real values live in the private Routine prompt, never in git. Any key you leave out keeps its default (see jobhunt/profile.py).",
+  "floor": 4000,
+  "tier_a": 8000,
+  "tier_b": 5000,
+  "stale_days": 21,
+  "shortlist_threshold": 60,
+  "strong_threshold": 75,
+  "max_outreach": 5,
+  "prune_days": 45,
+  "hunt_start": null,
+  "languages": ["english"],
+  "languages_flag_only": ["arabic"],
+  "needs_visa_sponsorship": null,
+  "watchlist_companies": [],
+  "lexicon": ["generative ai", "comfyui", "midjourney", "kling", "meta ads", "google analytics", "n8n"]
+}

@@ -1,0 +1,12 @@
+__pycache__/
+*.pyc
+out/
+run/
+profile.json
+candidates.json
+raw.json
+need.json
+tracker*.csv
+analysis.json
+health.json
+readback.txt
