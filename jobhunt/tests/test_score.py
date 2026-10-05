@@ -543,6 +543,68 @@ class ThinListingTests(unittest.TestCase):
         self.assertEqual(e.status, "rejected")
 
 
+class ListingPageLinkTests(unittest.TestCase):
+    """A results page is not a job. A live run stored the Indeed search address as a job's link."""
+
+    SERP = "https://ae.indeed.com/jobs?q=Generative+AI+Specialist&l=Dubai&fromage=3&sort=date"
+
+    def test_a_search_page_is_never_kept_as_the_jobs_link(self):
+        e = evaluate(cand(url=self.SERP), DEFAULT_PROFILE, TODAY)
+        self.assertEqual(e.url, "")
+        self.assertEqual(e.all_urls, [])
+        self.assertIn("no_job_link", e.flags)
+
+    def test_the_other_listing_pages_are_caught_too(self):
+        for url in ("https://ae.indeed.com/q-social-media-manager-l-dubai-jobs.html",
+                    "https://ae.indeed.com/l-dubai-jobs.html",
+                    "https://www.bayt.com/en/uae/jobs/social-media-manager-jobs-in-dubai/",
+                    "https://www.linkedin.com/jobs/search/?keywords=social%20media",
+                    "https://www.linkedin.com/comm/jobs/search-results/?x=1"):
+            self.assertEqual(evaluate(cand(url=url), DEFAULT_PROFILE, TODAY).url, "", url)
+
+    def test_real_job_links_are_untouched(self):
+        for url in ("https://ae.indeed.com/viewjob?jk=a99402720521a673", "https://to.indeed.com/aactk227gs7w",
+                    "https://www.bayt.com/en/uae/jobs/senior-social-media-manager-4567890/",
+                    "https://www.linkedin.com/jobs/view/4473137196/", "https://example.com/jobs/azya-smmm"):
+            e = evaluate(cand(url=url), DEFAULT_PROFILE, TODAY)
+            self.assertEqual(e.url, url, url)
+            self.assertNotIn("no_job_link", e.flags, url)
+
+    def test_a_missing_url_is_not_flagged_as_a_wrong_one(self):
+        self.assertNotIn("no_job_link", evaluate(cand(url=None), DEFAULT_PROFILE, TODAY).flags)
+
+    def test_the_good_link_survives_when_the_job_was_seen_on_two_pages(self):
+        e = evaluate(cand(url=self.SERP, all_urls=[self.SERP, "https://to.indeed.com/aabbcc"]), DEFAULT_PROFILE, TODAY)
+        self.assertEqual(e.all_urls, ["https://to.indeed.com/aabbcc"])
+
+
+class SnippetOnlyTests(unittest.TestCase):
+    """The few bullets a results page shows are not a job description."""
+
+    SNIPPET = ("Experience with ChatGPT, Gemini, Claude & AI tools. Basic AI automation and prompt engineering. "
+               "Use AI tools for daily business tasks.")  # 133 characters: over the 120 that counts as a description
+
+    def test_without_the_marker_a_snippet_is_scored_like_a_full_description(self):
+        e = evaluate(cand(title="AI Specialist", description=self.SNIPPET, pay_text=None, years_required=None), DEFAULT_PROFILE, TODAY)
+        self.assertNotIn("no_jd", e.flags)  # this is the false precision the marker removes
+        self.assertGreater(e.components["skills"], 8)
+
+    def test_with_the_marker_it_is_judged_on_the_title_and_the_rest(self):
+        e = evaluate(cand(title="AI Specialist", description=self.SNIPPET, description_partial=True, pay_text=None,
+                          years_required=None), DEFAULT_PROFILE, TODAY)
+        self.assertIn("no_jd", e.flags)
+        self.assertEqual(e.components["skills"], 8)
+        self.assertFalse(e.strong)
+
+    def test_the_marker_does_not_hide_a_full_description(self):
+        full = evaluate(cand(description_partial=False), DEFAULT_PROFILE, TODAY)
+        self.assertNotIn("no_jd", full.flags)
+
+    def test_the_snippet_text_is_still_kept_for_the_report(self):
+        e = evaluate(cand(description=self.SNIPPET, description_partial=True), DEFAULT_PROFILE, TODAY)
+        self.assertEqual(e.description, self.SNIPPET)
+
+
 class AmpersandTests(unittest.TestCase):
     def test_an_ampersand_reads_as_and(self):
         self.assertEqual(title_points("Social Media & Digital Marketing Manager", "", DEFAULT_PROFILE)[0], 24)

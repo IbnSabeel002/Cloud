@@ -75,9 +75,29 @@ class PlaybookTests(unittest.TestCase):
     def test_slack_is_opt_in_and_the_final_message_is_the_fallback(self):
         # The Slack workspace is a work account whose admins may read DMs, so it is off unless the user says so.
         self.assertIn("Slack is opt-in", PLAYBOOK)
-        self.assertIn("`SLACK_USER_ID` is `none`", PLAYBOOK)
+        self.assertIn("`none` or empty means off", PLAYBOOK)
         self.assertIn("final message", PLAYBOOK)
         self.assertIn("--drafts", PLAYBOOK)  # the digest claims only drafts that exist
+
+    def test_slack_is_switched_on_by_the_settings_and_only_to_the_users_own_dm(self):
+        # The Routine's prompt cannot be edited, so the Slack id comes from the settings document.
+        for phrase in ("`slack_user_id` in the settings document (section 3) replaces `SLACK_USER_ID`",
+                       "`slack_read_user_profile` with no `user_id`", "must show the same person",
+                       "Never post to a channel", "Never put anything in a DM that is not the digest",
+                       "Always make the digest your **final message**"):
+            self.assertIn(phrase, PLAYBOOK, phrase)
+        self.assertIn("`slack_user_id`", PLAYBOOK.split("## 3.")[1].split("## 4.")[0])  # a known settings field
+
+    def test_the_notice_period_comes_from_a_script_not_from_the_model(self):
+        for phrase in ("python3 -m jobhunt availability --card $RUN/card.json", "never write a start date of your own",
+                       "Save it as `$RUN/card.json`"):
+            self.assertIn(phrase, PLAYBOOK, phrase)
+        self.assertIn("`notice_ends_by`", PLAYBOOK)
+
+    def test_the_labour_card_flag_is_known_to_the_model_and_the_report(self):
+        from jobhunt.report import FLAG_LABELS
+        self.assertIn("needs_own_labour_card", PLAYBOOK)
+        self.assertIn("needs_own_labour_card", FLAG_LABELS)
 
     def test_connector_tools_are_found_by_name_not_by_prefix(self):
         # Measured 2026-10-05: in a worker session Indeed's search_jobs is mcp__<uuid>__search_jobs.
@@ -106,7 +126,7 @@ class PlaybookTests(unittest.TestCase):
 
     def test_the_playbook_never_lets_the_agent_invent_an_availability_date(self):
         self.assertIn("Never invent a date for the end of the notice period", PLAYBOOK)
-        self.assertIn("copy it as written", PLAYBOOK)
+        self.assertIn("as printed", PLAYBOOK)
 
     def test_an_indeed_rate_limit_costs_one_wait_then_falls_back_to_tiny_fish(self):
         # Measured 2026-10-05: waits grew 16s, 39s, 52s and one run lost about 7 minutes retrying.
@@ -130,6 +150,19 @@ class PlaybookTests(unittest.TestCase):
     def test_at_most_five_alert_jobs_are_looked_up_elsewhere(self):
         self.assertIn("at most 5 of them per run", PLAYBOOK)
 
+    def test_a_results_page_is_never_a_jobs_link_and_a_snippet_is_never_a_description(self):
+        # A live run stored the Indeed search address as a job's link and scored three bullets as a full description.
+        for phrase in ("python3 -m jobhunt indeed-links --page", "the k-th card gets the k-th link",
+                       "Never use the results page's own address as a job's `url`", "`no_job_link`",
+                       "`description_partial`", "set `description_partial: true`",
+                       "Never a results or search page", "`links: true`"):
+            self.assertIn(phrase, PLAYBOOK, phrase)
+
+    def test_cards_from_a_results_page_are_opened_through_their_own_link_with_firecrawl_as_the_fallback(self):
+        for phrase in ("Cards from a results page", "Indeed answers it with error 401 (measured)", "`firecrawl_scrape`",
+                       "Take the text under `Full job description`", "so always open it"):
+            self.assertIn(phrase, PLAYBOOK, phrase)
+
     def test_the_candidate_file_holds_only_the_fetched_entries(self):
         # A live test run put all 58 hits in candidates.json and the digest counted jobs twice.
         self.assertIn("the entries of `need.json`'s `fetch` list", PLAYBOOK)
@@ -143,7 +176,9 @@ class PlaybookTests(unittest.TestCase):
 
     def test_readme_explains_where_settings_live(self):
         self.assertIn("config/candidate", README)
-        self.assertIn("serving a notice period", README)
+        self.assertIn("notice period ends by a\n  date you gave", README)
+        self.assertIn("labour card", README)
+        self.assertIn("Slack:** on", README)
         self.assertNotIn("These live in the private Routine prompt", README)
 
     def test_a_long_lived_worker_treats_each_wake_up_as_a_cold_start(self):

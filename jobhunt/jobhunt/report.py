@@ -38,6 +38,8 @@ FLAG_LABELS = {
     "arabic_native_required": "native Arabic required",
     "emirati_preferred": "Emirati preferred",
     "immediate_joiner": "wants an immediate joiner (check your notice end date)",
+    "needs_own_labour_card": "wants you to bring your own labour card (yours must come from the new employer)",
+    "no_job_link": "no direct link to the job (search its title and company)",
 }
 
 
@@ -74,7 +76,8 @@ def _age(entry: dict) -> str:
 
 def _pay(entry: dict) -> str:
     if entry.get("pay_display") in (None, "", "not listed"):
-        return "pay not listed"
+        # With no description captured the pay was never looked for, which is not the same as "not listed".
+        return "pay not checked" if "no_jd" in (entry.get("flags") or []) else "pay not listed"
     return f"{entry['pay_display']} ({entry.get('pay_source', 'unknown')})"
 
 

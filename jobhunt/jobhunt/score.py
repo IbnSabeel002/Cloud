@@ -84,6 +84,19 @@ def has_phrase(haystack: str, phrase: str) -> bool:
     return re.search(pattern, haystack) is not None
 
 
+# A page that lists jobs is not a job. Linking one sends the user to a different list tomorrow.
+_LISTING_PAGE = re.compile(
+    r"indeed\.com/(?:jobs\?|q-[^/?#]*\.html|l-[^/?#]*\.html|browsejobs)"
+    r"|bayt\.com/[^?#]*-jobs-in-"
+    r"|linkedin\.com/(?:comm/)?jobs/(?:search|collections)",
+    re.I,
+)
+
+
+def is_listing_page(url: str | None) -> bool:
+    return bool(url) and _LISTING_PAGE.search(str(url)) is not None
+
+
 def _norm_language(name: str) -> str:
     low = str(name).strip().lower()
     return _LANGUAGE_ALIASES.get(low, low)
@@ -197,15 +210,17 @@ def evaluate(c: dict, profile: dict, today: date) -> Evaluation:
         company=company,
         title=title,
         location=location,
-        url=str(c.get("url") or ""),
+        url="" if is_listing_page(c.get("url")) else str(c.get("url") or ""),
         source=str(c.get("source") or "other"),
-        all_urls=[u for u in (c.get("all_urls") or [c.get("url")]) if u],
+        all_urls=[u for u in (c.get("all_urls") or [c.get("url")]) if u and not is_listing_page(u)],
         apply_method=str(c.get("apply_method") or "unknown"),
         apply_email=(c.get("apply_email") or None),
         description=description,
     )
     reasons: list[str] = []
     flags: list[str] = []
+    if c.get("url") and not ev.url:
+        flags.append("no_job_link")
 
     # --- freshness
     posted = parse_posted(c.get("posted"), today)
@@ -313,6 +328,8 @@ def evaluate(c: dict, profile: dict, today: date) -> Evaluation:
     # --- components
     t_pts, t_phrase = title_points(title, description, profile)
     s_pts, hits, jd_missing = skill_points(title, description, profile)
+    if c.get("description_partial"):  # only the few bullets a results page shows: too little to judge skills on
+        s_pts, hits, jd_missing = 8, [], True
     if jd_missing:
         flags.append("no_jd")
     years = c.get("years_required")
