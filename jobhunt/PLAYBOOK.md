@@ -91,6 +91,11 @@ Call `search_jobs(search=<query>, location="Dubai", country_code="AE")` for each
 
 Each hit gives title, company, location, "Posted on", job id and URL. The connector shows **no pay and no date filter**, and the same job often comes back several times under different ids (7 times for one listing in a live test), so expect 30% duplicates. Pay comes from `get_job_details` later.
 
+**Rate limit.** The connector limits calls per account across all sessions (`Rate limit exceeded for account … Try again in N seconds`), and the wait grows with every retry (16 s, then 39 s, then 52 s in a live test; one run lost about 7 minutes retrying). So:
+- Make **at most 3 Indeed calls at a time**, not a burst of 10.
+- On a rate-limit answer, wait the seconds it names **once** and retry that call **once**. Do not loop on waits.
+- If it still fails, stop using the connector for this run. Record `Indeed connector` as `ok: false, detail: "rate limited"` and open the remaining jobs with Tiny Fish `fetch_content` on their `https://to.indeed.com/…` links. The page text holds the description and the pay line.
+
 Two quirks seen in live runs:
 - `get_job_details` returns `Compensation: None` and often `Company: None`, **even when the post has a pay line**. Read the pay from a `Pay: AED…` line at the bottom of the description, and keep the company from the search hit.
 - `Pay: From AED1,111.00 per month` is a board placeholder far more often than a real offer. Record it as written; the script flags it (`pay_min_below_floor`) and does not trust it.
@@ -224,6 +229,7 @@ You never decide a job is "good enough". Only the user does, by setting a job to
 | Code self-check | DM and stop (section 2) |
 | `ArtifactData` unavailable | stateless run (section 3) and say so in the digest |
 | One source | `ok: false` in health, continue; the digest shows a degraded-run warning |
+| Indeed rate limit | wait once, retry once, then open the remaining jobs with Tiny Fish `fetch_content` (section 4.1) |
 | Every source | DM `No data today: all sources failed`, write nothing, stop |
 | Tracker write or verify | retry once, then record the failure and continue (section 8) |
 | Gmail sign-in or authorization error | no alerts read, no drafts created; `ok: false` in health with `Gmail needs re-authorization`; everything else continues |

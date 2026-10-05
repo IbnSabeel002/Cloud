@@ -108,6 +108,13 @@ class PlaybookTests(unittest.TestCase):
         self.assertIn("Never invent a date for the end of the notice period", PLAYBOOK)
         self.assertIn("copy it as written", PLAYBOOK)
 
+    def test_an_indeed_rate_limit_costs_one_wait_then_falls_back_to_tiny_fish(self):
+        # Measured 2026-10-05: waits grew 16s, 39s, 52s and one run lost about 7 minutes retrying.
+        for phrase in ("Rate limit exceeded for account", "at most 3 Indeed calls at a time", "Do not loop on waits",
+                       '"rate limited"', "| Indeed rate limit |"):
+            self.assertIn(phrase, PLAYBOOK, phrase)
+        self.assertLess(PLAYBOOK.index("**Rate limit.**"), PLAYBOOK.index("Two quirks seen in live runs"))
+
     def test_the_playbook_knows_the_immediate_joiner_flag(self):
         from jobhunt.report import FLAG_LABELS
         self.assertIn("immediate_joiner", PLAYBOOK)
