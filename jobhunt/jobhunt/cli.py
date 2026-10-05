@@ -1,8 +1,8 @@
 """Command line entry points. Thin wrappers over pipeline() so the logic stays testable.
 
     python -m jobhunt prefilter --candidates raw.json --out need.json [--profile p.json] [--db-dir DIR] [--limit 25]
-    python -m jobhunt run    --candidates c.json --out DIR [--profile p.json] [--db-dir DIR] [--today YYYY-MM-DD]
-    python -m jobhunt report --out DIR [--analysis a.json] [--health h.json] [--report-url URL] [--tracker-url URL]
+    python -m jobhunt run    --candidates c.json --out DIR [--profile p.json] [--db-dir DIR] [--prefilter need.json] [--today YYYY-MM-DD]
+    python -m jobhunt report --out DIR [--analysis a.json] [--health h.json] [--report-url URL] [--tracker-url URL] [--drafts N]
     python -m jobhunt verify --db-dir DIR --hash SHA256
     python -m jobhunt parse-pay "AED 4,000 - 5,000"
 """
@@ -150,6 +150,20 @@ def cmd_prefilter(args) -> int:
     return 0
 
 
+def _fold_in_prefilter(summary: dict, need: dict) -> None:
+    """Jobs the prefilter dropped never reached `run`. Count them so the digest shows the whole funnel."""
+    skipped = need.get("skipped", {})
+    summary["raw_hits"] = need.get("raw_in", 0)
+    for reason, count in skipped.items():
+        if reason == "already_seen":
+            summary["already_seen"] += count
+        elif reason in ("duplicate", "invalid"):
+            continue  # not jobs the user was ever going to see
+        else:
+            summary["reject_reasons"][reason] = summary["reject_reasons"].get(reason, 0) + count
+            summary["rejected_jobs"] += count
+
+
 def cmd_run(args) -> int:
     today = date.fromisoformat(args.today) if args.today else dubai_today()
     profile = load_profile(args.profile)
@@ -157,6 +171,8 @@ def cmd_run(args) -> int:
     existing, warnings = _load_existing(args)
     result = pipeline(profile, candidates, existing, today)
     result.summary["tracker_warnings"] = warnings
+    if args.prefilter:
+        _fold_in_prefilter(result.summary, _read_json(args.prefilter))
 
     out = Path(args.out)
     out.mkdir(parents=True, exist_ok=True)
@@ -178,7 +194,8 @@ def cmd_report(args) -> int:
     analysis = _read_json(args.analysis) if args.analysis and Path(args.analysis).exists() else {}
     health = _read_json(args.health) if args.health and Path(args.health).exists() else None
     today = date.fromisoformat(summary["today"])
-    chunks = digest_chunks(summary, shortlist, health, analysis, args.report_url, today, tracker_url=args.tracker_url)
+    chunks = digest_chunks(summary, shortlist, health, analysis, args.report_url, today, tracker_url=args.tracker_url,
+                           drafts_created=args.drafts)
     for i, chunk in enumerate(chunks, 1):
         (out / f"digest_{i}.txt").write_text(chunk, encoding="utf-8")
     (out / "report.html").write_text(render_report_html(summary, shortlist, health, analysis, today), encoding="utf-8")
@@ -229,6 +246,7 @@ def build_parser() -> argparse.ArgumentParser:
     run.add_argument("--profile")
     run.add_argument("--tracker")
     run.add_argument("--db-dir", help="folder written by ArtifactData list out_dir (holds jobs/*.json)")
+    run.add_argument("--prefilter", help="need.json from the prefilter step, so its skipped jobs are counted")
     run.add_argument("--today", help="YYYY-MM-DD (default: today in Dubai)")
     run.set_defaults(func=cmd_run)
 
@@ -238,6 +256,7 @@ def build_parser() -> argparse.ArgumentParser:
     rep.add_argument("--health")
     rep.add_argument("--report-url")
     rep.add_argument("--tracker-url", help="link to the tracker page, shown in the digest")
+    rep.add_argument("--drafts", type=int, default=0, help="how many Gmail drafts were really created (default 0)")
     rep.set_defaults(func=cmd_report)
 
     ver = sub.add_parser("verify", help="check a read-back tracker against the expected hash")

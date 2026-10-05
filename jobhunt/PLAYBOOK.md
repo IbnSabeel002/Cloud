@@ -131,10 +131,10 @@ If Firecrawl tools exist, use `firecrawl_search` (domain-filtered to bayt.com, g
 ## 6. Decide
 
 ```bash
-python3 -m jobhunt run --candidates $RUN/candidates.json --db-dir $RUN/db --profile $RUN/profile.json --out $RUN/out
+python3 -m jobhunt run --candidates $RUN/candidates.json --db-dir $RUN/db --prefilter $RUN/need.json --profile $RUN/profile.json --out $RUN/out
 ```
 
-Read `$RUN/out/summary.json`. The script has decided who is shortlisted, who is strong, what was screened out and why. It wrote `shortlist.json`, `summary.json`, and **`writes.json`: the exact database writes needed**. If `summary.invalid` is non-empty, fix those records once and re-run.
+Read `$RUN/out/summary.json`. The script has decided who is shortlisted, who is strong, what was screened out and why. It wrote `shortlist.json`, `summary.json`, and **`writes.json`: the exact database writes needed**. `--prefilter` folds the jobs dropped in step 5 into the counts, so the digest shows the whole funnel. If `summary.invalid` is non-empty, fix those records once and re-run.
 
 ## 7. Deep dive (the part only you can do)
 
@@ -178,15 +178,15 @@ Writing rules: simple English. Short sentences. No flattery. No buzzwords. One r
       ```
    2. `create_file(title="Job Hunt Report <TODAY>-<HHMM>", parentId=<folderId>, textContent=<report.html>, contentMimeType="text/html")`. It converts to a Doc. Run `get_file_permissions` on it (owner only). Keep its URL. If any other person or "anyone" appears, `trash_file` it and never share it.
 4. **Record the run.** Run the report command once more with the URL (section 9, step 1). It writes `$RUN/out/run_doc.json`. Then `ArtifactData(action="set", url=TRACKER_URL, collection="runs", doc_id="<TODAY>-<HHMM>", file_path="$RUN/out/run_doc.json")`. The tracker page shows it as "last run".
-5. **Gmail drafts.** For each entry with `"outreach": true` **and** an `apply_email`: `create_draft(to=[apply_email], subject=<first line of email_note>, body=<rest of email_note>)`. Plain text. Never send. Entries without an apply email get no draft; their notes are in the report. If Gmail answers with a sign-in or authorization error, create no drafts, record `Gmail drafts` as `ok: false, detail: "Gmail needs re-authorization"`, and say in the Slack digest that the outreach text is in the report instead.
+5. **Gmail drafts.** For each entry with `"outreach": true` **and** an `apply_email`: `create_draft(to=[apply_email], subject=<first line of email_note>, body=<rest of email_note>)`. Plain text. Never send. Entries without an apply email get no draft; their notes are in the report. If Gmail answers with a sign-in or authorization error, create no drafts, record `Gmail drafts` as `ok: false, detail: "Gmail needs re-authorization"`, and pass `--drafts 0`. The digest then says the outreach text is in the report instead.
 
 ## 9. Notify
 
 1. Build the digest again, now with the Doc's URL, the tracker link and the final health file (it includes the results from section 8):
    ```bash
-   python3 -m jobhunt report --out $RUN/out --analysis $RUN/analysis.json --health $RUN/health.json --report-url <report URL> --tracker-url $TRACKER_URL
+   python3 -m jobhunt report --out $RUN/out --analysis $RUN/analysis.json --health $RUN/health.json --report-url <report URL> --tracker-url $TRACKER_URL --drafts <number of Gmail drafts you really created>
    ```
-   This writes `digest_1.txt` (and `digest_2.txt`… if long). If section 8 could not create the Doc, omit `--report-url`.
+   The digest claims only what happened: pass the real number of drafts (0 when Gmail failed or no post had an apply email). This writes `digest_1.txt` (and `digest_2.txt`… if long). If section 8 could not create the Doc, omit `--report-url`.
 2. `slack_read_user_profile` for `SLACK_USER_ID`. Confirm it is the user's own account.
 3. `slack_send_message(channel_id=SLACK_USER_ID, message=<digest_N.txt>)` for each digest file, in order. If the first send fails, retry once. If it still fails, say so in the Drive report.
 

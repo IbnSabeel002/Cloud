@@ -115,3 +115,35 @@ class ReadmeTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TrackerPageTests(unittest.TestCase):
+    """The tracker page is published from tracker_page.html. Its labels must match the report's."""
+
+    def setUp(self):
+        self.page = (ROOT / "tracker_page.html").read_text(encoding="utf-8")
+
+    def test_every_flag_the_page_can_label_is_labelled_in_the_report_too(self):
+        import re
+        from jobhunt.report import FLAG_LABELS
+        block = re.search(r"var FLAG_LABELS = \{(.*?)\n  \};", self.page, re.S).group(1)
+        page_keys = set(re.findall(r'"?([a-z_:]+)"?\s*:\s*"', block))
+        self.assertGreater(len(page_keys), 15)
+        missing = page_keys - set(FLAG_LABELS)
+        self.assertFalse(missing, f"labelled on the page but not in report.py: {missing}")
+
+    def test_page_reads_the_columns_the_database_stores(self):
+        from jobhunt.tracker import COLUMNS
+        for column in COLUMNS:
+            if column in ("Key", "LastSeen"):  # Key is the document id; LastSeen is internal
+                continue
+            self.assertIn(f"d.{column}", self.page, column)
+
+    def test_page_declares_a_title_and_uses_only_the_database_capability(self):
+        self.assertIn("<title>Job Hunt Tracker</title>", self.page)
+        self.assertIn('claude.use("db")', self.page)
+        self.assertNotIn("localStorage", self.page)
+        self.assertNotIn("innerHTML", self.page)  # job text is untrusted; the page only ever sets textContent
+
+    def test_page_never_assigns_untrusted_urls_without_a_scheme_check(self):
+        self.assertIn("/^https:\\/\\//", self.page)

@@ -19,6 +19,7 @@ REASON_LABELS = {
     "upfront_fee": "asks candidate to pay",
     "whatsapp_only_apply": "WhatsApp-only apply",
     "no_visa_sponsorship": "no visa sponsorship",
+    "off_target_title": "title does not match what you hunt",
 }
 FLAG_LABELS = {
     "no_date": "no posting date", "pay_unlisted": "pay not listed", "pay_estimate": "pay is an estimate",
@@ -31,6 +32,11 @@ FLAG_LABELS = {
     "engineering_role": "engineering title, needs a software background",
     "employer_mismatch": "employer name differs from the job text",
     "prompt_injection_attempt": "post tried to give the agent instructions",
+    "heavy_overtime": "heavy overtime",
+    "asks_current_salary": "asks your current salary",
+    "arabic_required": "Arabic required",
+    "arabic_native_required": "native Arabic required",
+    "emirati_preferred": "Emirati preferred",
 }
 
 
@@ -101,7 +107,7 @@ def _chunk(text: str, limit: int) -> list[str]:
 def digest_chunks(
     summary: dict, shortlist: list[dict], health: list[dict] | None, analysis: dict | None,
     report_url: str | None, today: date, max_top: int = 5, limit: int = SLACK_LIMIT,
-    tracker_url: str | None = None,
+    tracker_url: str | None = None, drafts_created: int | None = None,
 ) -> list[str]:
     analysis = analysis or {}
     health_line, degraded = _health_line(health)
@@ -146,8 +152,13 @@ def digest_chunks(
         out.append(f"Full report + outreach drafts: {report_url}")
     if tracker_url:
         out.append(f"Tracker (change a status or add a note): {tracker_url}")
-    if summary.get("outreach_keys"):
-        out.append(f"{len(summary['outreach_keys'])} outreach draft(s) saved in Gmail Drafts. Nothing was sent.")
+    strong = len(summary.get("outreach_keys") or [])
+    if drafts_created:
+        out.append(f"{drafts_created} outreach draft(s) saved in Gmail Drafts. Nothing was sent.")
+    if strong and drafts_created != strong:
+        # Say only what happened: a draft needs an apply email in the post and a working Gmail connection.
+        left = strong - (drafts_created or 0)
+        out.append(f"Outreach notes for {left} strong match(es) are in the report (no draft was saved). Nothing was sent.")
     if day and day % 14 == 0:
         out.append(f"Day {day} of the hunt. Still searching? Tell Claude \"stop the job hunt\" to pause me.")
     out.append("To stop: tell Claude \"stop the job hunt\", or set a tracker row to Accepted.")
@@ -175,7 +186,7 @@ def render_report_html(
         "<p>"
         f"<b>{summary['new_shortlisted']}</b> new shortlisted · {summary['already_seen']} already seen · "
         f"{summary['rejected_jobs']} screened out · {summary['below_threshold']} weak matches · "
-        f"{summary['candidates_in']} candidates in</p>",
+        f"{summary.get('raw_hits') or summary['candidates_in']} hits found</p>",
     ]
     reasons = summary.get("reject_reasons", {})
     if reasons:

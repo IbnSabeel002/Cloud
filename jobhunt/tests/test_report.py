@@ -54,7 +54,19 @@ class DigestTests(unittest.TestCase):
         self.assertIn("Score 76 · Tier U · pay not listed · posted 6d ago · ⭐ strong", text)
         self.assertNotIn("Check: pay not listed", text)  # pay is already shown on the line above
         self.assertIn("Full report + outreach drafts: https://example.com/report", text)
-        self.assertIn("3 outreach draft(s) saved in Gmail Drafts. Nothing was sent.", text)
+        # No draft was created, so the digest must not claim one was.
+        self.assertNotIn("saved in Gmail Drafts", text)
+        self.assertIn("Outreach notes for 3 strong match(es) are in the report (no draft was saved). Nothing was sent.", text)
+
+    def test_digest_claims_only_the_drafts_that_exist(self):
+        self.assertIn("3 outreach draft(s) saved in Gmail Drafts. Nothing was sent.", self.digest(drafts_created=3))
+        self.assertNotIn("no draft was saved", self.digest(drafts_created=3))
+        mixed = self.digest(drafts_created=1)
+        self.assertIn("1 outreach draft(s) saved in Gmail Drafts", mixed)
+        self.assertIn("Outreach notes for 2 strong match(es) are in the report", mixed)
+        self.r.summary["outreach_keys"] = []
+        self.assertNotIn("Outreach notes", self.digest())
+        self.assertNotIn("Gmail Drafts", self.digest())
 
     def test_digest_links_to_the_tracker_page_when_given(self):
         text = self.digest(tracker_url="https://claude.ai/artifact/abc")
@@ -136,6 +148,13 @@ class HtmlTests(unittest.TestCase):
             self.assertIn(e["company"], page)
         self.assertIn("4 × posting too old", page)
         self.assertIn("Also on:", page)  # the Azya listing seen on two boards
+
+    def test_the_report_counts_every_hit_found_not_just_those_opened(self):
+        self.r.summary["raw_hits"] = 68
+        page = render_report_html(self.r.summary, self.r.shortlist, HEALTHY, None, TODAY)
+        self.assertIn("68 hits found", page)
+        del self.r.summary["raw_hits"]
+        self.assertIn("19 hits found", render_report_html(self.r.summary, self.r.shortlist, HEALTHY, None, TODAY))
 
     def test_analysis_sections_appear_when_supplied(self):
         top = self.r.shortlist[0]["job_id"]

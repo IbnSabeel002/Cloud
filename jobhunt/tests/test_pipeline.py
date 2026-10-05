@@ -220,3 +220,29 @@ class CliTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class PrefilterFoldInTests(unittest.TestCase):
+    """The prefilter drops most hits before `run` sees them. The digest must still count them."""
+
+    def test_skipped_jobs_join_the_funnel_counts(self):
+        from jobhunt.cli import _fold_in_prefilter
+        summary = {"already_seen": 1, "rejected_jobs": 2, "reject_reasons": {"stale": 1}}
+        need = {"raw_in": 68, "skipped": {"stale": 39, "off_target_title": 16, "already_seen": 3, "duplicate": 26, "invalid": 1}}
+        _fold_in_prefilter(summary, need)
+        self.assertEqual(summary["reject_reasons"], {"stale": 40, "off_target_title": 16})
+        self.assertEqual(summary["rejected_jobs"], 2 + 39 + 16)
+        self.assertEqual(summary["already_seen"], 1 + 3)  # a seen job is still a seen job
+        self.assertEqual(summary["raw_hits"], 68)  # duplicates and invalid records are not jobs the user would see
+
+    def test_cli_applies_it(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            need = Path(tmp) / "need.json"
+            need.write_text(json.dumps({"raw_in": 10, "skipped": {"stale": 7}}))
+            out = Path(tmp) / "o"
+            with contextlib.redirect_stdout(io.StringIO()):
+                code = main(["run", "--candidates", str(FIXTURE), "--prefilter", str(need), "--out", str(out), "--today", "2026-10-05"])
+            self.assertEqual(code, 0)
+            summary = json.loads((out / "summary.json").read_text())
+            self.assertEqual(summary["reject_reasons"]["stale"], 4 + 7)
+            self.assertEqual(summary["rejected_jobs"], 9 + 7)
