@@ -48,6 +48,15 @@ def canonical_status(value: str | None) -> str:
 
 # ----------------------------------------------------------------------- parsing
 
+_UNESCAPED_PIPE = re.compile(r"(?<!\\)\|")
+_TABLE_RANGE = re.compile(r"Table Range:\s*[A-Z]+1:[A-Z]+(\d+)", re.I)
+
+
+def _md_unescape(cell: str) -> str:
+    """Drive's text rendering is markdown: it writes j\\_9c79 for j_9c79 and \\| for a literal pipe."""
+    return re.sub(r"\\([!-/:-@\[-`{-~])", r"\1", cell)
+
+
 def _split_rows(text: str) -> list[list[str]]:
     lines = [ln for ln in text.splitlines() if ln.strip()]
     if not lines:
@@ -63,10 +72,13 @@ def _split_rows(text: str) -> list[list[str]]:
     if head.lstrip().startswith("|"):
         rows = []
         for ln in body:
-            cells = [c.strip() for c in ln.strip().strip("|").split("|")]
+            stripped = ln.strip()
+            if not stripped.startswith("|"):
+                break  # the table ended; Drive appends a "Table Columns" summary after it
+            cells = [c.strip() for c in _UNESCAPED_PIPE.split(stripped.strip("|"))]
             if all(re.fullmatch(r":?-{2,}:?", c) for c in cells if c):
                 continue  # markdown separator row
-            rows.append(cells)
+            rows.append([_md_unescape(c) for c in cells])
         return rows
     delimiter = "\t" if head.count("\t") >= head.count(",") and "\t" in head else ","
     return [row for row in csv.reader(io.StringIO("\n".join(body)), delimiter=delimiter)]
@@ -97,6 +109,10 @@ def parse_table(text: str) -> tuple[list[dict], list[str]]:
             continue
         row["Status"] = canonical_status(row["Status"])
         rows.append(row)
+    declared = _TABLE_RANGE.search(text)
+    if declared and len(rows) != int(declared.group(1)) - 1:
+        # Drive states the table's size. A different count means the read-back was cut short or mangled.
+        warnings.append(f"readback incomplete: Drive reports {int(declared.group(1)) - 1} data rows, parsed {len(rows)}")
     return rows, warnings
 
 
@@ -167,15 +183,17 @@ def merge(existing: list[dict], evaluations: list, today: date, profile: dict) -
         row = rows.get(ev.job_id)
         if row is not None:
             stats["already_seen"] += 1
-            if ev.status == "shortlisted":
-                row["LastSeen"] = today.isoformat()
-                if row["Status"] == "Shortlisted":  # the user has not acted: keep it fresh
-                    row.update({
-                        "Score": str(ev.score), "Tier": ev.tier, "Pay": ev.pay_display,
-                        "PaySource": ev.pay_source, "URL": ev.url or row["URL"], "Flags": ";".join(ev.flags),
-                    })
-            elif row["Status"] == "Shortlisted" and "stale" in ev.reject_reasons:
+            if ev.status == "shortlisted" and row["Status"] == "Shortlisted":  # the user has not acted
+                fresh = {
+                    "Score": str(ev.score), "Tier": ev.tier, "Pay": _clean(ev.pay_display),
+                    "PaySource": _clean(ev.pay_source), "URL": _clean(ev.url) or row["URL"], "Flags": ";".join(ev.flags),
+                }
+                if any(_norm_cell(k, row[k]) != _norm_cell(k, v) for k, v in fresh.items()):
+                    row.update(fresh)
+                    row["LastSeen"] = today.isoformat()  # LastSeen means: last time the agent wrote this row
+            elif ev.status != "shortlisted" and row["Status"] == "Shortlisted" and "stale" in ev.reject_reasons:
                 row["Status"] = "Dead"
+                row["LastSeen"] = today.isoformat()
                 row["Notes"] = (row["Notes"] + " " if row["Notes"] else "") + "auto: posting went stale"
                 stats["auto_dead"] += 1
             continue
@@ -188,16 +206,18 @@ def merge(existing: list[dict], evaluations: list, today: date, profile: dict) -
             stats["rejected_jobs"] += 1
             stats["reject_reasons"].update(ev.reject_reasons)
 
+    # Pruned by FirstSeen, not LastSeen: a job first seen more than `prune_days` ago would be screened out as
+    # stale if it came back, so its row no longer protects against anything.
     cutoff = today - timedelta(days=profile["prune_days"])
     for key in list(rows):
         row = rows[key]
         if row["Status"] in PROTECTED:
             continue
         try:
-            last = date.fromisoformat(row["LastSeen"])
+            first = date.fromisoformat(row["FirstSeen"])
         except ValueError:
             continue  # unparseable date: keep the row rather than silently drop the user's data
-        if last < cutoff:
+        if first < cutoff:
             del rows[key]
             stats["pruned"] += 1
     return list(rows.values()), stats

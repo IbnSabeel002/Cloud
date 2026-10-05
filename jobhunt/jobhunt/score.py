@@ -114,10 +114,15 @@ def skill_points(title: str, description: str, profile: dict) -> tuple[int, list
 
 def seniority_points(years: int | None, title: str, profile: dict) -> tuple[int, list[str]]:
     flags = []
+    have = profile.get("years_experience")
     if years is None:
         points = 10
     elif years <= 1:
         points = 6
+    elif have is not None:
+        # Marked down by how far the post's minimum is above what the candidate has.
+        gap = years - have
+        points = 15 if gap <= 0 else {1: 12, 2: 9, 3: 6}.get(gap, 3)
     elif years <= 6:
         points = 15
     elif years <= 9:
@@ -234,6 +239,9 @@ def evaluate(c: dict, profile: dict, today: date) -> Evaluation:
         flags.append("pay_unlisted")
     elif pay.low is not None and pay.high is not None and pay.midpoint < profile["floor"]:
         flags.append("pay_straddles_floor")
+    elif pay.high is None and pay.low is not None and pay.low < profile["floor"]:
+        # "From AED 1,111" is usually a board placeholder, but it is also what a low payer advertises.
+        flags.append("pay_min_below_floor")
     if ev.pay_source == "estimate":
         flags.append("pay_estimate")
 
@@ -255,6 +263,12 @@ def evaluate(c: dict, profile: dict, today: date) -> Evaluation:
         reasons.append(f"job_type:{job_type}")
     elif job_type == "contract":
         flags.append("contract")
+    if not any(r.startswith("job_type:") for r in reasons):
+        title_words = _squash_for_matching(title)
+        for term in profile["reject_job_types"]:
+            if has_phrase(title_words, term):  # e.g. a "Freelance ..." title on a post the board calls permanent
+                flags.append("title_says:" + term.replace(" ", "_"))
+                break
 
     # --- scam and quality signals
     haystack = f"{title}\n{description}"
@@ -275,6 +289,14 @@ def evaluate(c: dict, profile: dict, today: date) -> Evaluation:
     if c.get("gender_restricted"):
         flags.append("gender_restricted")
 
+    # Observations only the model can make (employer_mismatch, prompt_injection_attempt, ...).
+    # Strictly validated: these come from the model reading untrusted text, and they end up in a report.
+    valid_extras = [
+        label for label in (str(x).strip().lower() for x in (c.get("extra_flags") or []))
+        if re.fullmatch(r"[a-z0-9_:]{1,40}", label)
+    ]
+    flags.extend(valid_extras[:5])  # validate first, then cap, so junk cannot crowd out real flags
+
     # --- components
     t_pts, t_phrase = title_points(title, description, profile)
     s_pts, hits, jd_missing = skill_points(title, description, profile)
@@ -292,6 +314,10 @@ def evaluate(c: dict, profile: dict, today: date) -> Evaluation:
     if domain in FREE_EMAIL_DOMAINS:
         adjust -= 8
         flags.append("free_email_apply")
+    title_for_negatives = _squash_for_matching(title).replace("prompt engineer", " ")
+    if any(has_phrase(title_for_negatives, t) for t in profile.get("negative_title_terms", [])):
+        adjust -= 8
+        flags.append("engineering_role")
     scope = [s for s in (c.get("scope_items") or []) if str(s).strip()]
     if len(scope) >= 4:
         adjust -= 10 if tier in ("C", "U") else 4

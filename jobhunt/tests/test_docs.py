@@ -61,6 +61,21 @@ class PlaybookTests(unittest.TestCase):
                       "description"):
             self.assertIn(f"`{field}`", PLAYBOOK, field)
 
+    def test_the_memory_is_the_database_not_a_drive_file(self):
+        # Measured on 2026-10-05: Drive's Sheet read-back drops rows past ~115 and shortens cells to "...".
+        for phrase in ("ArtifactData", "TRACKER_URL", "out_dir", "if_version", "writes.json", "--db-dir"):
+            self.assertIn(phrase, PLAYBOOK, phrase)
+        self.assertIn("Do not use Drive Sheets or Docs as memory", PLAYBOOK)
+        self.assertNotIn("Job Hunt Tracker <TODAY>", PLAYBOOK)  # the old Drive snapshot naming is gone
+
+    def test_every_version_pinned_write_has_a_safe_failure_path(self):
+        self.assertIn("A wrong version is safe", PLAYBOOK)
+        self.assertIn("nothing is written", PLAYBOOK)
+
+    def test_stateless_fallback_is_documented(self):
+        self.assertIn("stateless", PLAYBOOK)
+        self.assertIn("tracker unavailable", PLAYBOOK)
+
     def test_stop_path_is_documented_in_both_docs(self):
         for doc in (PLAYBOOK, README):
             self.assertIn("Accepted", doc)

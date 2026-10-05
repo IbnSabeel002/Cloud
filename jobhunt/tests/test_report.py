@@ -56,6 +56,11 @@ class DigestTests(unittest.TestCase):
         self.assertIn("Full report + outreach drafts: https://example.com/report", text)
         self.assertIn("3 outreach draft(s) saved in Gmail Drafts. Nothing was sent.", text)
 
+    def test_digest_links_to_the_tracker_page_when_given(self):
+        text = self.digest(tracker_url="https://claude.ai/artifact/abc")
+        self.assertIn("Tracker (change a status or add a note): https://claude.ai/artifact/abc", text)
+        self.assertNotIn("Tracker (change", self.digest())
+
     def test_model_written_why_overrides_the_auto_one(self):
         top = self.r.shortlist[0]["job_id"]
         text = self.digest(analysis={top: {"why": "Pay is real and the JD asks for your exact stack."}})
@@ -166,6 +171,9 @@ class LabelTests(unittest.TestCase):
         self.assertEqual(flag_label("language:arabic"), "Arabic required")
         self.assertEqual(flag_label("pay_assumed:period_assumed_yearly"), "pay period assumed yearly")
         self.assertEqual(flag_label("brand_new_flag"), "brand_new_flag")
+        self.assertEqual(flag_label("pay_min_below_floor"), "advertised minimum is under your floor")
+        self.assertEqual(flag_label("employer_mismatch"), "employer name differs from the job text")
+        self.assertEqual(flag_label("title_says:part_time"), "title says part time")
 
 
 if __name__ == "__main__":

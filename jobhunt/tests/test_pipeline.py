@@ -104,7 +104,8 @@ class MultiDayTests(unittest.TestCase):
         kept = {r["Key"]: r for r in second.rows}
         self.assertEqual((kept[applied_key]["Status"], kept[applied_key]["Notes"]), ("Applied", "emailed on the 5th"))
         self.assertTrue(all(r["FirstSeen"] == "2026-10-05" for r in second.rows))
-        self.assertTrue(all(r["LastSeen"] == "2026-10-06" for r in second.rows if r["Status"] != "Dead"))
+        # Seeing the same jobs again writes nothing: the only difference from day one is the user's own edit.
+        self.assertEqual(second.summary["tracker_hash"], tracker.content_hash(rows))
 
     def test_a_genuinely_new_job_appears_the_next_day(self):
         first = pipeline(load_profile(), candidates(), [], TODAY)

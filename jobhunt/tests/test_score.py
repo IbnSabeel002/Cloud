@@ -43,6 +43,10 @@ class TitlePointTests(unittest.TestCase):
         self.assertEqual(self.pts("Senior Social Media Manager"), 24)
         self.assertEqual(self.pts("Marketing Operations Manager"), 22)
         self.assertEqual(self.pts("Digital Transformation Lead"), 22)
+        # Seen in live Dubai results: automation-flavoured AI titles must not score zero.
+        self.assertEqual(self.pts("AI & Automation Specialist"), 22)
+        self.assertEqual(self.pts("Senior Agentic AI Solutions Specialist"), 22)
+        self.assertEqual(self.pts("Generative AI Software Engineer & Digital Marketing Specialist | AI Automation"), 30)
         self.assertEqual(self.pts("Creative Director"), 16)
         self.assertEqual(self.pts("Content Creator"), 10)
         self.assertEqual(self.pts("Off-Page SEO Specialist - Links, Placements & Media"), 0)
@@ -93,6 +97,16 @@ class SeniorityTests(unittest.TestCase):
         self.assertEqual(self.pts(6)[0], 15)
         self.assertEqual(self.pts(8)[0], 9)
         self.assertEqual(self.pts(12)[0], 3)
+
+    def test_years_gap_against_the_candidates_own_experience(self):
+        five = load_profile(overrides={"years_experience": 5})
+        pts = lambda y: seniority_points(y, "Social Media Manager", five)[0]
+        self.assertEqual([pts(y) for y in (2, 5, 6, 7, 8, 9, 12)], [15, 15, 12, 9, 6, 3, 3])
+        self.assertEqual(pts(None), 10)
+        self.assertEqual(pts(1), 6)  # asking for a year or less is still junior work
+
+    def test_without_candidate_years_the_fixed_bands_apply(self):
+        self.assertEqual(seniority_points(8, "Social Media Manager", DEFAULT_PROFILE)[0], 9)
 
     def test_executive_title_is_treated_as_junior(self):
         pts, flags = self.pts(4, "Social Media Marketing Executive")
@@ -291,6 +305,45 @@ class ScoringTests(unittest.TestCase):
         self.assertFalse([f for f in ev(pay_text="25,000").flags if f.startswith("pay_assumed")])
         self.assertIn("pay_assumed:period_assumed_yearly", ev(pay_text="AED 120,000").flags)
         self.assertIn("pay_assumed:multiple_numbers_used_first", ev(pay_text="Basic 9000 + housing 2000 + transport 500").flags)
+
+    def test_engineering_titles_are_marked_down_even_with_ai_in_the_title(self):
+        # Seen live: a software-engineering post that scored above a better-fitting AI role.
+        eng = ev(title="Generative AI Software Engineer & Digital Marketing Specialist | AI Automation")
+        plain = ev(title="Generative AI Producer")
+        self.assertIn("engineering_role", eng.flags)
+        self.assertEqual(eng.components["adjustment"], -8)
+        self.assertNotIn("engineering_role", plain.flags)
+
+    def test_prompt_engineer_is_not_treated_as_an_engineering_role(self):
+        self.assertNotIn("engineering_role", ev(title="Prompt Engineer").flags)
+        self.assertIn("engineering_role", ev(title="Prompt Engineer and Backend Developer").flags)
+
+    def test_business_development_is_not_a_developer(self):
+        self.assertNotIn("engineering_role", ev(title="Business Development Manager").flags)
+
+    def test_advertised_minimum_under_the_floor_is_flagged_not_rejected(self):
+        # Seen live: "From AED1,111.00 per month" on a real Dubai AI role.
+        e = ev(pay_text="From AED1,111.00 per month")
+        self.assertIn("pay_min_below_floor", e.flags)
+        self.assertEqual((e.tier, e.reject_reasons), ("U", []))
+        self.assertNotIn("pay_min_below_floor", ev(pay_text="From AED 5,000").flags)
+        self.assertNotIn("pay_min_below_floor", ev(pay_text="From AED18,000.00 per month").flags)
+
+    def test_a_freelance_title_on_a_permanent_post_is_flagged(self):
+        # Seen live: "Freelance Graphic Designer ..." posted as Permanent.
+        e = ev(title="Freelance Graphic Designer & Creative Content Specialist", job_type="full-time")
+        self.assertIn("title_says:freelance", e.flags)
+        self.assertNotIn("job_type:freelance", e.reject_reasons)
+        self.assertEqual([f for f in ev(job_type="freelance").flags if f.startswith("title_says")], [])
+
+    def test_extra_flags_are_validated_and_capped(self):
+        base = set(ev().flags)
+        e = ev(extra_flags=["employer_mismatch", "Prompt_Injection_Attempt", "bad flag!", "<script>", "x" * 50,
+                            "a", "b", "c", "d"])
+        added = set(e.flags) - base
+        # Junk is dropped without using up slots; of the 6 valid labels only the first 5 are kept.
+        self.assertEqual(added, {"employer_mismatch", "prompt_injection_attempt", "a", "b", "c"})
+        self.assertNotIn("d", e.flags)
 
     def test_pay_estimate_flag(self):
         self.assertIn("pay_estimate", ev(pay_source="estimate").flags)

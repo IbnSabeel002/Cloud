@@ -1,9 +1,9 @@
 """Command line entry points. Thin wrappers over pipeline() so the logic stays testable.
 
-    python -m jobhunt prefilter --candidates raw.json --out need.json [--profile p.json] [--tracker t.csv] [--limit 25]
-    python -m jobhunt run    --candidates c.json --out DIR [--profile p.json] [--tracker t.csv] [--today YYYY-MM-DD]
-    python -m jobhunt report --out DIR [--analysis a.json] [--health h.json] [--report-url URL]
-    python -m jobhunt verify --tracker readback.txt --hash SHA256
+    python -m jobhunt prefilter --candidates raw.json --out need.json [--profile p.json] [--db-dir DIR] [--limit 25]
+    python -m jobhunt run    --candidates c.json --out DIR [--profile p.json] [--db-dir DIR] [--today YYYY-MM-DD]
+    python -m jobhunt report --out DIR [--analysis a.json] [--health h.json] [--report-url URL] [--tracker-url URL]
+    python -m jobhunt verify --db-dir DIR --hash SHA256
     python -m jobhunt parse-pay "AED 4,000 - 5,000"
 """
 
@@ -17,7 +17,7 @@ from dataclasses import dataclass
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 
-from . import tracker
+from . import store, tracker
 from .profile import load_profile
 from .report import digest_chunks, render_report_html, render_report_md
 from .salary import parse_pay
@@ -128,12 +128,21 @@ def _load_candidates(path: str) -> list:
     return candidates
 
 
+def _load_existing(args) -> tuple[list, list]:
+    """Yesterday's rows: from the Artifact database export (--db-dir) or a tracker CSV (--tracker)."""
+    if getattr(args, "db_dir", None):
+        if not Path(args.db_dir).exists():
+            return [], []  # first run: nothing stored yet
+        return store.load_dir(args.db_dir), []
+    if args.tracker and Path(args.tracker).exists():
+        return tracker.parse_table(Path(args.tracker).read_text(encoding="utf-8"))
+    return [], []
+
+
 def cmd_prefilter(args) -> int:
     today = date.fromisoformat(args.today) if args.today else dubai_today()
     profile = load_profile(args.profile)
-    existing = []
-    if args.tracker and Path(args.tracker).exists():
-        existing, _ = tracker.parse_table(Path(args.tracker).read_text(encoding="utf-8"))
+    existing, _ = _load_existing(args)
     result = prefilter(profile, _load_candidates(args.candidates), existing, today, args.limit)
     Path(args.out).parent.mkdir(parents=True, exist_ok=True)
     Path(args.out).write_text(json.dumps(result, indent=2, ensure_ascii=False), encoding="utf-8")
@@ -145,14 +154,16 @@ def cmd_run(args) -> int:
     today = date.fromisoformat(args.today) if args.today else dubai_today()
     profile = load_profile(args.profile)
     candidates = _load_candidates(args.candidates)
-    existing, warnings = [], []
-    if args.tracker and Path(args.tracker).exists():
-        existing, warnings = tracker.parse_table(Path(args.tracker).read_text(encoding="utf-8"))
+    existing, warnings = _load_existing(args)
     result = pipeline(profile, candidates, existing, today)
     result.summary["tracker_warnings"] = warnings
 
     out = Path(args.out)
     out.mkdir(parents=True, exist_ok=True)
+    if args.db_dir:
+        manifest = store.plan_writes(existing, result.rows, out)
+        result.summary["writes"] = manifest["counts"]
+        result.summary["versions_needed"] = manifest["versions_needed"]
     (out / "tracker.csv").write_text(tracker.dump_csv(result.rows), encoding="utf-8")
     (out / "shortlist.json").write_text(json.dumps(result.shortlist, indent=2, ensure_ascii=False), encoding="utf-8")
     (out / "summary.json").write_text(json.dumps(result.summary, indent=2, ensure_ascii=False), encoding="utf-8")
@@ -167,17 +178,22 @@ def cmd_report(args) -> int:
     analysis = _read_json(args.analysis) if args.analysis and Path(args.analysis).exists() else {}
     health = _read_json(args.health) if args.health and Path(args.health).exists() else None
     today = date.fromisoformat(summary["today"])
-    chunks = digest_chunks(summary, shortlist, health, analysis, args.report_url, today)
+    chunks = digest_chunks(summary, shortlist, health, analysis, args.report_url, today, tracker_url=args.tracker_url)
     for i, chunk in enumerate(chunks, 1):
         (out / f"digest_{i}.txt").write_text(chunk, encoding="utf-8")
     (out / "report.html").write_text(render_report_html(summary, shortlist, health, analysis, today), encoding="utf-8")
     (out / "report.md").write_text(render_report_md(summary, shortlist, health, analysis, today), encoding="utf-8")
-    print(json.dumps({"digest_files": len(chunks), "report": ["report.html", "report.md"]}))
+    (out / "run_doc.json").write_text(
+        json.dumps(store.run_doc(summary, health, args.report_url), ensure_ascii=False), encoding="utf-8")
+    print(json.dumps({"digest_files": len(chunks), "report": ["report.html", "report.md"], "run_doc": "run_doc.json"}))
     return 0
 
 
 def cmd_verify(args) -> int:
-    rows, warnings = tracker.parse_table(Path(args.tracker).read_text(encoding="utf-8"))
+    if args.db_dir:
+        rows, warnings = store.load_dir(args.db_dir), []
+    else:
+        rows, warnings = tracker.parse_table(Path(args.tracker).read_text(encoding="utf-8"))
     actual = tracker.content_hash(rows)
     ok = actual == args.hash
     print(json.dumps({"ok": ok, "rows": len(rows), "expected": args.hash, "actual": actual, "warnings": warnings}))
@@ -202,6 +218,7 @@ def build_parser() -> argparse.ArgumentParser:
     pre.add_argument("--out", required=True)
     pre.add_argument("--profile")
     pre.add_argument("--tracker")
+    pre.add_argument("--db-dir", help="folder written by ArtifactData list out_dir (holds jobs/*.json)")
     pre.add_argument("--today", help="YYYY-MM-DD (default: today in Dubai)")
     pre.add_argument("--limit", type=int, default=25)
     pre.set_defaults(func=cmd_prefilter)
@@ -211,6 +228,7 @@ def build_parser() -> argparse.ArgumentParser:
     run.add_argument("--out", required=True)
     run.add_argument("--profile")
     run.add_argument("--tracker")
+    run.add_argument("--db-dir", help="folder written by ArtifactData list out_dir (holds jobs/*.json)")
     run.add_argument("--today", help="YYYY-MM-DD (default: today in Dubai)")
     run.set_defaults(func=cmd_run)
 
@@ -219,10 +237,12 @@ def build_parser() -> argparse.ArgumentParser:
     rep.add_argument("--analysis")
     rep.add_argument("--health")
     rep.add_argument("--report-url")
+    rep.add_argument("--tracker-url", help="link to the tracker page, shown in the digest")
     rep.set_defaults(func=cmd_report)
 
     ver = sub.add_parser("verify", help="check a read-back tracker against the expected hash")
-    ver.add_argument("--tracker", required=True)
+    ver.add_argument("--tracker", help="a tracker CSV or a text read-back of one")
+    ver.add_argument("--db-dir", help="folder written by ArtifactData list out_dir (holds jobs/*.json)")
     ver.add_argument("--hash", required=True)
     ver.set_defaults(func=cmd_verify)
 

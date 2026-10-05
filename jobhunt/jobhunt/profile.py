@@ -21,7 +21,7 @@ DEFAULT_PROFILE: dict = {
     "shortlist_threshold": 60,
     "strong_threshold": 75,
     "max_outreach": 5,
-    "prune_days": 45,
+    "prune_days": 30,
     # Candidate facts used for scoring.
     "languages": ["english"],
     "languages_flag_only": ["arabic"],
@@ -33,6 +33,10 @@ DEFAULT_PROFILE: dict = {
     ],
     "soft_junior_title_terms": ["executive", "assistant", "coordinator", "admin", "associate"],
     "reject_job_types": ["part-time", "part time", "freelance", "internship", "intern"],
+    # Years of experience the candidate has. When set, a post asking for more is marked down by the gap.
+    "years_experience": None,
+    # Engineering titles need a software background; a "Generative AI" in the title does not change that.
+    "negative_title_terms": ["engineer", "developer", "architect", "scientist", "devops", "programmer"],
     "title_keywords": [
         {"points": 30, "phrases": [
             "creative ai", "ai creative", "generative ai", "gen ai", "genai", "ai content",
@@ -48,6 +52,7 @@ DEFAULT_PROFILE: dict = {
         {"points": 22, "phrases": [
             "marketing operations", "marketing automation", "digital transformation",
             "marketing technologist", "martech", "marketing technology", "growth operations",
+            "ai automation", "ai and automation", "agentic ai", "automation specialist",
         ]},
         {"points": 16, "phrases": [
             "social media specialist", "digital marketing manager", "content strategist",

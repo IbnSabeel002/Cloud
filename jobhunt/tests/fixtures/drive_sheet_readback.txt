@@ -1,0 +1,31 @@
+Context Type: corpus_document
+## Table Context
+### File Name: Job Hunt Tracker 2026-10-05-2102
+### Sheet Name: Untitled
+### Table Range: A1:N6
+### Table Sample Data:
+|               |            |            |             |       |      |                     |           |                            |                                                                                 |        |                                    |                                                   |       |
+| :-----------: | :--------: | :--------: | :---------: | :---: | :--: | :-----------------: | :-------: | :------------------------: | :-----------------------------------------------------------------------------: | :----: | :--------------------------------: | :-----------------------------------------------: | :---: |
+| Key           | FirstSeen  | LastSeen   | Status      | Score | Tier | Pay                 | PaySource | Company                    | Title                                                                           | Source | URL                                | Flags                                             | Notes |
+| j\_9c7980927f | 2026-10-05 | 2026-10-05 | Shortlisted | 86    | A    | AED 18,000+/mo      | listing   | Trade Quo Global Ltd       | AI Influencer Marketer                                                          | indeed | https://to.indeed.com/aa7gldpglphd | asks\_current\_salary                             |       |
+| j\_217e1063d1 | 2026-10-05 | 2026-10-05 | Shortlisted | 73    | A    | AED 8,000–11,000/mo | listing   | Rayqube Futrue Tech        | Lead Graphic, Motion Graphics & AI Video Specialist                             | indeed | https://to.indeed.com/aagrw6wjhq28 | heavy\_overtime                                   |       |
+| j\_595315ebf5 | 2026-10-05 | 2026-10-05 | Shortlisted | 68    | U    | AED 1,111+/mo       | listing   | Varasto                    | AI SPECIALIST                                                                   | indeed | https://to.indeed.com/aahgfqcyqryb | pay\_min\_below\_floor;visa\_not\_stated          |       |
+| j\_61c519ef63 | 2026-10-05 | 2026-10-05 | Shortlisted | 65    | U    | not listed          | unknown   | Wodoh Engineering Services | Generative AI Software Engineer & Digital Marketing Specialist \| AI Automation | indeed | https://to.indeed.com/aadjjgskypmg | pay\_unlisted;visa\_not\_stated;engineering\_role |       |
+| j\_a5a999ae09 | 2026-10-05 | 2026-10-05 | Shortlisted | 60    | U    | not listed          | unknown   | Sokin                      | Senior Social Media Manager (Global) - Dubai                                    | indeed | https://to.indeed.com/aatdyrdclw9w | pay\_unlisted;visa\_not\_stated                   |       |
+
+### Table Columns:
+-
+  - range: A1:A6
+  - sample data: Key, j_9c7980927f, j_217e1063d1, j_595315ebf5, j_61c519ef63, j_a5a999ae09
+-
+  - range: B1:B6
+  - sample data: FirstSeen, 2026-10-05, 2026-10-05, 2026-10-05, 2026-10-05, 2026-10-05
+-
+  - range: D1:D6
+  - sample data: Status, Shortlisted, Shortlisted, Shortlisted, Shortlisted, Shortlisted
+-
+  - range: J1:J6
+  - sample data: Title, AI Influencer Marketer, Lead Graphic, Motion Graphics & AI Video Specialist, AI SPECIALIST, Generative AI Software Engineer & Digital Marketing Specialist | AI Automation, Senior Social Media Manager (Global) - Dubai
+-
+  - range: N1:N6
+  - sample data: Notes, , , , ,

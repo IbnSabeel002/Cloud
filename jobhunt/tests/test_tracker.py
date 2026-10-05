@@ -96,6 +96,60 @@ class ParseTests(unittest.TestCase):
         self.assertEqual((rows[0]["Score"], rows[0]["Company"]), ("", ""))
 
 
+REAL_CSV_SENT_TO_DRIVE = '''Key,FirstSeen,LastSeen,Status,Score,Tier,Pay,PaySource,Company,Title,Source,URL,Flags,Notes
+j_9c7980927f,2026-10-05,2026-10-05,Shortlisted,86,A,"AED 18,000+/mo",listing,Trade Quo Global Ltd,AI Influencer Marketer,indeed,https://to.indeed.com/aa7gldpglphd,asks_current_salary,
+j_217e1063d1,2026-10-05,2026-10-05,Shortlisted,73,A,"AED 8,000–11,000/mo",listing,Rayqube Futrue Tech,"Lead Graphic, Motion Graphics & AI Video Specialist",indeed,https://to.indeed.com/aagrw6wjhq28,heavy_overtime,
+j_595315ebf5,2026-10-05,2026-10-05,Shortlisted,68,U,"AED 1,111+/mo",listing,Varasto,AI SPECIALIST,indeed,https://to.indeed.com/aahgfqcyqryb,pay_min_below_floor;visa_not_stated,
+j_61c519ef63,2026-10-05,2026-10-05,Shortlisted,65,U,not listed,unknown,Wodoh Engineering Services,Generative AI Software Engineer & Digital Marketing Specialist | AI Automation,indeed,https://to.indeed.com/aadjjgskypmg,pay_unlisted;visa_not_stated;engineering_role,
+j_a5a999ae09,2026-10-05,2026-10-05,Shortlisted,60,U,not listed,unknown,Sokin,Senior Social Media Manager (Global) - Dubai,indeed,https://to.indeed.com/aatdyrdclw9w,pay_unlisted;visa_not_stated,
+'''
+FIXTURES = __import__("pathlib").Path(__file__).parent / "fixtures"
+
+
+class DriveReadbackTests(unittest.TestCase):
+    """The fixture is what Google Drive's read_file_content returned for a Sheet made from REAL_CSV_SENT_TO_DRIVE."""
+
+    def setUp(self):
+        self.readback = (FIXTURES / "drive_sheet_readback.txt").read_text(encoding="utf-8")
+
+    def test_real_round_trip_through_drive_is_exact(self):
+        sent, _ = tracker.parse_table(REAL_CSV_SENT_TO_DRIVE)
+        got, warnings = tracker.parse_table(self.readback)
+        self.assertEqual(warnings, [])
+        self.assertEqual(len(got), 5)
+        self.assertEqual(tracker.content_hash(got), tracker.content_hash(sent))
+
+    def test_markdown_escapes_are_undone(self):
+        got, _ = tracker.parse_table(self.readback)
+        keys = [r["Key"] for r in got]
+        self.assertTrue(all("\\" not in k for k in keys), keys)  # j\_9c79... must come back as j_9c79...
+        self.assertIn("j_9c7980927f", keys)
+        wodoh = next(r for r in got if r["Company"].startswith("Wodoh"))
+        self.assertEqual(wodoh["Title"], "Generative AI Software Engineer & Digital Marketing Specialist | AI Automation")
+        self.assertIn("pay_unlisted;visa_not_stated;engineering_role", wodoh["Flags"])
+
+    def test_the_summary_drive_appends_after_the_table_is_not_read_as_rows(self):
+        got, _ = tracker.parse_table(self.readback)
+        self.assertEqual(len(got), 5)
+        self.assertFalse([r for r in got if r["Key"].startswith(("-", "#"))])
+
+    def test_a_user_edit_in_the_sheet_survives(self):
+        edited = self.readback.replace("| Shortlisted | 86 ", "| Applied     | 86 ")
+        got, _ = tracker.parse_table(edited)
+        self.assertEqual(next(r for r in got if r["Key"] == "j_9c7980927f")["Status"], "Applied")
+
+    def test_a_truncated_readback_is_detected_from_the_declared_range(self):
+        lines = self.readback.splitlines()
+        cut = [ln for ln in lines if "j\\_a5a999ae09" not in ln or not ln.startswith("|")]
+        got, warnings = tracker.parse_table("\n".join(cut))
+        self.assertEqual(len(got), 4)
+        self.assertTrue(any("readback incomplete" in w and "reports 5" in w for w in warnings), warnings)
+
+    def test_unescape_helper(self):
+        self.assertEqual(tracker._md_unescape(r"j\_9c \| x \\ y \* z"), r"j_9c | x \ y * z")
+        self.assertEqual(tracker._md_unescape("plain text 5-10"), "plain text 5-10")
+
+
 class StatusTests(unittest.TestCase):
     def test_synonyms(self):
         cases = {
@@ -137,13 +191,21 @@ class MergeTests(unittest.TestCase):
         rows, stats = self.merge(existing, [e])
         r = rows[0]
         self.assertEqual((r["Status"], r["Notes"], r["Score"]), ("Applied", "sent CV 4 Oct", "50"))
-        self.assertEqual(r["LastSeen"], "2026-10-05")  # still live
+        self.assertEqual(r["LastSeen"], "2026-10-02")  # seeing a job again is not a write
         self.assertEqual(stats["added_ids"], [])
 
     def test_auto_fields_refresh_only_while_shortlisted(self):
         e = ev()
         rows, _ = self.merge([row(Key=e.job_id, Score="10", Tier="C")], [e])
         self.assertEqual((rows[0]["Score"], rows[0]["Tier"]), (str(e.score), "A"))
+        self.assertEqual(rows[0]["LastSeen"], "2026-10-05")  # a real change is a write
+
+    def test_an_unchanged_job_seen_again_changes_nothing_at_all(self):
+        e = ev()
+        first, _ = self.merge([], [e])
+        before = [dict(r) for r in first]
+        later, _ = self.merge(first, [e], today=TODAY + timedelta(days=3))
+        self.assertEqual(later, before)  # not even LastSeen moves
 
     def test_rejected_by_user_is_never_resurrected(self):
         e = ev()
@@ -182,13 +244,13 @@ class MergeTests(unittest.TestCase):
     def test_prune_drops_old_unprotected_rows_only(self):
         old = (TODAY - timedelta(days=DEFAULT_PROFILE["prune_days"] + 1)).isoformat()
         existing = [
-            row(Key="j_short", Status="Shortlisted", LastSeen=old),
-            row(Key="j_rej", Status="Rejected", LastSeen=old),
-            row(Key="j_dead", Status="Dead", LastSeen=old),
-            row(Key="j_app", Status="Applied", LastSeen=old),
-            row(Key="j_int", Status="Interview", LastSeen=old),
-            row(Key="j_off", Status="Offer", LastSeen=old),
-            row(Key="j_new", Status="Shortlisted", LastSeen=TODAY.isoformat()),
+            row(Key="j_short", Status="Shortlisted", FirstSeen=old),
+            row(Key="j_rej", Status="Rejected", FirstSeen=old),
+            row(Key="j_dead", Status="Dead", FirstSeen=old),
+            row(Key="j_app", Status="Applied", FirstSeen=old),
+            row(Key="j_int", Status="Interview", FirstSeen=old),
+            row(Key="j_off", Status="Offer", FirstSeen=old),
+            row(Key="j_new", Status="Shortlisted", FirstSeen=TODAY.isoformat()),
         ]
         rows, stats = self.merge(existing, [])
         self.assertEqual({r["Key"] for r in rows}, {"j_app", "j_int", "j_off", "j_new"})
@@ -198,12 +260,12 @@ class MergeTests(unittest.TestCase):
         n = DEFAULT_PROFILE["prune_days"]
         on_the_line = (TODAY - timedelta(days=n)).isoformat()
         one_past = (TODAY - timedelta(days=n + 1)).isoformat()
-        rows, stats = self.merge([row(Key="j_keep", LastSeen=on_the_line), row(Key="j_drop", LastSeen=one_past)], [])
+        rows, stats = self.merge([row(Key="j_keep", FirstSeen=on_the_line), row(Key="j_drop", FirstSeen=one_past)], [])
         self.assertEqual([r["Key"] for r in rows], ["j_keep"])
         self.assertEqual(stats["pruned"], 1)
 
     def test_unparseable_date_is_kept_not_dropped(self):
-        rows, stats = self.merge([row(Key="j_x", LastSeen="whenever")], [])
+        rows, stats = self.merge([row(Key="j_x", FirstSeen="whenever")], [])
         self.assertEqual([r["Key"] for r in rows], ["j_x"])
         self.assertEqual(stats["pruned"], 0)
 

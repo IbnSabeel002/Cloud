@@ -10,7 +10,8 @@ and sends you a short list. It runs every morning until you tell it to stop.
    part-time/freelance roles, pay under your floor, and scam patterns.
 3. Scores what is left out of 100 and sorts it into pay tiers.
 4. Writes a gap analysis and outreach drafts for the strong ones (score 75 or more, at most 5 a day).
-5. Saves a tracker and a report in a private Google Drive folder, and sends a digest to your Slack DM.
+5. Saves new jobs to your private tracker page, writes a full report to a private Google Drive folder,
+   and sends a digest to your Slack DM.
 
 ## What it never does
 
@@ -23,13 +24,13 @@ and sends you a short list. It runs every morning until you tell it to stop.
 ## How the pieces fit
 
 ```
-Routine (daily, 07:47 Dubai)  ->  PLAYBOOK.md  ->  sources  ->  jobhunt package  ->  Drive + Gmail drafts + Slack
-                                   (the model)      (pages)       (the decisions)
+Routine (daily, 07:47 Dubai) -> PLAYBOOK.md -> sources -> jobhunt package -> tracker page + Drive report + Gmail drafts + Slack
+                                 (the model)    (pages)    (the decisions)    (private)
 ```
 
 The model reads pages and writes the prose. The `jobhunt` package makes every decision that has to be exact:
-pay parsing, dates, de-duplication, filters, scoring and the tracker. It is plain Python with no installs,
-and it is tested.
+pay parsing, dates, de-duplication, filters, scoring and which database writes are needed. It is plain Python
+with no installs, and it is tested.
 
 | File | Job |
 |---|---|
@@ -38,7 +39,8 @@ and it is tested.
 | `jobhunt/dates.py` | reads "16 days ago", "21 Sep", "Posted on: October 02, 2026" |
 | `jobhunt/normalize.py` | makes the same job on two boards one row |
 | `jobhunt/score.py` | filters and scoring |
-| `jobhunt/tracker.py` | the memory between days |
+| `jobhunt/tracker.py` | the merge rules: what to keep, add, update and prune |
+| `jobhunt/store.py` | turns those rules into the exact database writes |
 | `jobhunt/report.py` | the Slack digest and the report |
 | `jobhunt/cli.py` | the commands the playbook calls |
 | `profile.example.json` | a generic example of the settings |
@@ -64,26 +66,30 @@ or marked down. The digest always says where a pay figure came from.
 |---|---|---|
 | Title | 30 | how close the title is to what you are hunting |
 | Skills | 25 | how many of your tools the post names |
-| Seniority | 15 | whether the years asked suit you |
+| Seniority | 15 | how far the years asked sit above your own |
 | Pay | 20 | tier A 20, B 14, C 8, unlisted 8 |
 | Freshness | 5 | newer is better |
-| Adjustment | -20 to +5 | scope bloat, free-email apply, hidden employer, watchlist company |
+| Adjustment | -20 to +5 | engineering title, scope bloat, free-email apply, hidden employer, watchlist company |
 
 Score 60 or more is shortlisted. Score 75 or more is strong and gets outreach drafts.
 
 ## The tracker
 
-Drive's connector cannot overwrite a file, so each run saves a new dated Sheet
-(`Job Hunt Tracker <date>-<time>`) and the next run reads the newest one. The last 3 are kept.
-Open the newest one and edit the **Status** and **Notes** columns. The agent keeps what you type.
+The tracker is a private page with its own small database: one document per job. Open the page to see every
+shortlisted role, its score, pay and flags, and the last run's health. Change a job's **status** or type a **note**
+and the agent keeps it.
 
-Statuses you can type: `Shortlisted`, `Applied`, `Interview`, `Offer`, `Accepted`, `Rejected`, `Dead`.
-Common words work too (`skip`, `not interested`, `hired`, `interviewing`). A job you reject or apply to never comes back.
-Rows you have not touched are removed after 45 days without being seen.
+Statuses: `Shortlisted`, `Applied`, `Interview`, `Offer`, `Accepted`, `Rejected`, `Dead`.
+A job you reject or apply to never comes back. Jobs you have not touched are removed 30 days after they were
+first seen (a job that old would be screened out as stale anyway). `Applied`, `Interview`, `Offer` and `Accepted`
+are never removed.
+
+The agent writes only what changed: new jobs, and a job whose pay or score changed. Seeing the same job again
+writes nothing, so it can never overwrite an edit you just made.
 
 ## Stop, pause, change
 
-- **Stop:** tell Claude "stop the job hunt". It disables the Routine. Or set any row to `Accepted` and the agent stops itself.
+- **Stop:** tell Claude "stop the job hunt". It disables the Routine. Or set any job to `Accepted` on the tracker page and the agent stops itself.
 - **Pause:** tell Claude "pause the job hunt for two weeks".
 - **Change targets, pay floor, languages, queries:** tell Claude. These live in the private Routine prompt, not in git.
 - **Day 14, 28, …:** the digest asks if you are still hunting.
@@ -112,6 +118,10 @@ cat /tmp/demo/digest_1.txt
 - A daily run driven by a model is not perfectly repeatable. The package and the health line limit the damage.
   A failed source shows up as a warning in the digest instead of a silent gap.
 - Pay data on these boards is thin and the boards disagree. Treat pay figures as signals, not facts.
+- Gmail has to stay connected for alerts and drafts. If the connection expires, the digest says
+  "Gmail needs re-authorization" and everything else keeps running.
+- The tracker is a database because Google Drive could not hold it: the connector cannot overwrite a file, and
+  reading a Sheet back drops rows past about 115 and shortens cells to `...`. This was measured, not assumed.
 - The fixtures mix real listing details with a few invented fields. `tests/fixtures/candidates_2026-10-05.json` says which.
 
 ## Costs

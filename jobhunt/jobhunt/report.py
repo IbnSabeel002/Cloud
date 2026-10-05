@@ -27,6 +27,10 @@ FLAG_LABELS = {
     "junior_title": "junior-sounding title", "free_email_apply": "applies via free email",
     "scope_bloat": "3-jobs-in-1 scope", "employer_hidden": "employer hidden", "off_target_title": "off-target title",
     "watchlist_company": "on your watchlist", "language:arabic": "Arabic required",
+    "pay_min_below_floor": "advertised minimum is under your floor",
+    "engineering_role": "engineering title, needs a software background",
+    "employer_mismatch": "employer name differs from the job text",
+    "prompt_injection_attempt": "post tried to give the agent instructions",
 }
 
 
@@ -45,6 +49,8 @@ def flag_label(flag: str) -> str:
         return FLAG_LABELS[flag]
     if flag.startswith("pay_assumed:"):
         return "pay " + flag.split(":", 1)[1].replace("_", " ")
+    if flag.startswith("title_says:"):
+        return "title says " + flag.split(":", 1)[1].replace("_", " ")
     if flag.startswith("language:"):
         return flag.split(":", 1)[1].title() + " required"
     return flag
@@ -95,6 +101,7 @@ def _chunk(text: str, limit: int) -> list[str]:
 def digest_chunks(
     summary: dict, shortlist: list[dict], health: list[dict] | None, analysis: dict | None,
     report_url: str | None, today: date, max_top: int = 5, limit: int = SLACK_LIMIT,
+    tracker_url: str | None = None,
 ) -> list[str]:
     analysis = analysis or {}
     health_line, degraded = _health_line(health)
@@ -137,6 +144,8 @@ def digest_chunks(
     out.append("")
     if report_url:
         out.append(f"Full report + outreach drafts: {report_url}")
+    if tracker_url:
+        out.append(f"Tracker (change a status or add a note): {tracker_url}")
     if summary.get("outreach_keys"):
         out.append(f"{len(summary['outreach_keys'])} outreach draft(s) saved in Gmail Drafts. Nothing was sent.")
     if day and day % 14 == 0:

@@ -7,7 +7,7 @@
   "shortlist_threshold": 60,
   "strong_threshold": 75,
   "max_outreach": 5,
-  "prune_days": 45,
+  "prune_days": 30,
   "hunt_start": null,
   "languages": ["english"],
   "languages_flag_only": ["arabic"],
