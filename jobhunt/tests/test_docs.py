@@ -79,6 +79,16 @@ class PlaybookTests(unittest.TestCase):
         self.assertIn("final message", PLAYBOOK)
         self.assertIn("--drafts", PLAYBOOK)  # the digest claims only drafts that exist
 
+    def test_connector_tools_are_found_by_name_not_by_prefix(self):
+        # Measured 2026-10-05: in a worker session Indeed's search_jobs is mcp__<uuid>__search_jobs.
+        self.assertIn("UUID", PLAYBOOK)
+        self.assertIn("Do not conclude a tool is missing", PLAYBOOK)
+        self.assertIn("mcp__claude-code-remote__update_trigger", PLAYBOOK)
+
+    def test_a_long_lived_worker_treats_each_wake_up_as_a_cold_start(self):
+        self.assertIn("long-lived worker session", PLAYBOOK)
+        self.assertIn("cold start", PLAYBOOK)
+
     def test_stateless_fallback_is_documented(self):
         self.assertIn("stateless", PLAYBOOK)
         self.assertIn("tracker unavailable", PLAYBOOK)

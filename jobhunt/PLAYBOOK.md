@@ -7,6 +7,10 @@ exactly which database writes are needed. Never redo that arithmetic by hand.
 
 Tools below are named by their short names. If one is deferred, load it with ToolSearch first.
 
+**Tool names differ by session.** In a worker session the connector tools carry a UUID instead of a name, for example `mcp__5003a8ad-…__search_jobs` for Indeed's `search_jobs`. Do not conclude a tool is missing because `mcp__Indeed__search_jobs` is not found. Search by the tool's own name with ToolSearch (`search_jobs`, `get_job_details`, `fetch_content`, `create_file`, `search_files`, `get_file_permissions`, `search_threads`, `create_draft`, `slack_send_message`), then use whatever full name it returns. The trigger tools are `mcp__claude-code-remote__get_trigger` and `mcp__claude-code-remote__update_trigger`. `ArtifactData` has no prefix.
+
+**You may be a long-lived worker session**, woken once a day. Treat every wake-up as a cold start: delete and rebuild `$RUN`, and rely only on the tracker for memory, never on what you remember from earlier days. Keep your context small: never print whole job pages or whole files, read them with short scripts, and keep outputs in `$RUN`.
+
 ## 0. Hard rules (never break these)
 
 1. **Read-only on the job web.** Never click Apply, submit a form, create an account, log in, solve a CAPTCHA, upload a CV, or use a paywall bypass. Public pages only.
