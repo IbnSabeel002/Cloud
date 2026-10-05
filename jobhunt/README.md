@@ -91,7 +91,13 @@ writes nothing, so it can never overwrite an edit you just made.
 
 - **Stop:** tell Claude "stop the job hunt". It disables the Routine. Or set any job to `Accepted` on the tracker page and the agent stops itself.
 - **Pause:** tell Claude "pause the job hunt for two weeks".
-- **Change targets, pay floor, languages, queries:** tell Claude. These live in the private Routine prompt, not in git.
+- **Change targets, pay floor, languages, visa, availability, portfolio link:** tell Claude. The changes are saved in
+  the private tracker database (document `config/candidate`) and take effect on the next run. A Routine's own prompt
+  cannot be edited after it is created, which is why the settings are not kept there. None of it is in git.
+- **What the agent knows about you** comes from your CV plus what you told it: English only (a post that *requires*
+  Arabic is dropped; "Arabic is a plus" is kept), you hold your own visa (so "visa not stated" is never raised and
+  "no visa provided" is never a reason to drop a post), you are serving a notice period (end date unknown, so it is
+  never quoted), and your portfolio link goes into outreach drafts.
 - **Day 14, 28, …:** the digest asks if you are still hunting.
 
 ## Run the tests

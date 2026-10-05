@@ -37,6 +37,7 @@ FLAG_LABELS = {
     "arabic_required": "Arabic required",
     "arabic_native_required": "native Arabic required",
     "emirati_preferred": "Emirati preferred",
+    "immediate_joiner": "wants an immediate joiner (check your notice end date)",
 }
 
 

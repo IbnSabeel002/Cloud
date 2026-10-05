@@ -193,6 +193,7 @@ class LabelTests(unittest.TestCase):
         self.assertEqual(flag_label("pay_min_below_floor"), "advertised minimum is under your floor")
         self.assertEqual(flag_label("employer_mismatch"), "employer name differs from the job text")
         self.assertEqual(flag_label("title_says:part_time"), "title says part time")
+        self.assertEqual(flag_label("immediate_joiner"), "wants an immediate joiner (check your notice end date)")
 
 
 if __name__ == "__main__":

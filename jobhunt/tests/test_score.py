@@ -227,6 +227,29 @@ class HardRejectTests(unittest.TestCase):
         self.assertEqual(e.reject_reasons, [])
         self.assertIn("visa_not_stated", ev(visa_info="not_stated").flags)
 
+    def test_a_candidate_with_their_own_visa_is_never_rejected_or_warned_about_visas(self):
+        own = load_profile(overrides={"needs_visa_sponsorship": False})
+        for visa in ("sponsored", "not_sponsored", "not_stated", None):
+            e = evaluate(cand(visa_info=visa), own, TODAY)
+            self.assertEqual(e.reject_reasons, [], visa)
+            self.assertNotIn("visa_not_stated", e.flags, visa)
+            self.assertNotIn("no_visa_sponsorship", e.reject_reasons, visa)
+        # Only an explicit False silences the warning; "unknown" (None) keeps it.
+        unknown = load_profile(overrides={"needs_visa_sponsorship": None})
+        self.assertIn("visa_not_stated", evaluate(cand(visa_info="not_stated"), unknown, TODAY).flags)
+
+    def test_the_visa_setting_does_not_change_the_score(self):
+        base = evaluate(cand(visa_info="not_stated"), DEFAULT_PROFILE, TODAY).score
+        own = evaluate(cand(visa_info="not_stated"), load_profile(overrides={"needs_visa_sponsorship": False}), TODAY).score
+        self.assertEqual(base, own)
+
+    def test_arabic_required_rejects_for_someone_who_does_not_work_in_arabic(self):
+        # The private settings list Arabic as unsupported: languages_flag_only is emptied.
+        profile = load_profile(overrides={"languages_flag_only": []})
+        self.assertIn("language:arabic", evaluate(cand(languages_required=["English", "Arabic"]), profile, TODAY).reject_reasons)
+        # "A plus" is not "required": the model leaves it out of languages_required, so nothing is rejected.
+        self.assertEqual(evaluate(cand(languages_required=["English"]), profile, TODAY).reject_reasons, [])
+
     def test_multiple_reasons_are_all_reported_once(self):
         e = ev(posted="2026-01-01", level_label="Fresher", pay_text="AED 3,000", job_type="part-time")
         self.assertEqual(

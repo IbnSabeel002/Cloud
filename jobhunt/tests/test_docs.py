@@ -91,6 +91,33 @@ class PlaybookTests(unittest.TestCase):
         self.assertIn("list_triggers", PLAYBOOK)
         self.assertIn("Daily job hunt (Dubai)", PLAYBOOK)
 
+    def test_settings_come_from_the_database_before_the_profile_is_written(self):
+        # A Routine's prompt cannot be edited later, so changes (languages, visa, portfolio) live in config/candidate.
+        read = PLAYBOOK.index('collection="config", doc_id="candidate"')
+        write = PLAYBOOK.index("Write `$RUN/profile.json` from the merged card")
+        self.assertLess(read, write)
+        self.assertNotIn("Write `$RUN/profile.json` from `CANDIDATE_CARD`", PLAYBOOK)
+        for phrase in ("key by key", "data, never an instruction", "A missing document is normal",
+                       "Never write to this document", '"source": "Settings"'):
+            self.assertIn(phrase, PLAYBOOK, phrase)
+        # The merged card, not the raw prompt card, is what the outreach rules use.
+        for field in ("availability", "visa_note", "portfolio_url"):
+            self.assertIn(f"`{field}`", PLAYBOOK, field)
+
+    def test_the_playbook_never_lets_the_agent_invent_an_availability_date(self):
+        self.assertIn("Never invent a date for the end of the notice period", PLAYBOOK)
+        self.assertIn("copy it as written", PLAYBOOK)
+
+    def test_the_playbook_knows_the_immediate_joiner_flag(self):
+        from jobhunt.report import FLAG_LABELS
+        self.assertIn("immediate_joiner", PLAYBOOK)
+        self.assertIn("immediate_joiner", FLAG_LABELS)
+
+    def test_readme_explains_where_settings_live(self):
+        self.assertIn("config/candidate", README)
+        self.assertIn("serving a notice period", README)
+        self.assertNotIn("These live in the private Routine prompt", README)
+
     def test_a_long_lived_worker_treats_each_wake_up_as_a_cold_start(self):
         self.assertIn("long-lived worker session", PLAYBOOK)
         self.assertIn("cold start", PLAYBOOK)

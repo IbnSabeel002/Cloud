@@ -283,7 +283,8 @@ def evaluate(c: dict, profile: dict, today: date) -> Evaluation:
     visa = str(c.get("visa_info") or "not_stated")
     if visa == "not_sponsored" and profile.get("needs_visa_sponsorship") is True:
         reasons.append("no_visa_sponsorship")
-    elif visa in ("not_stated", ""):
+    elif visa in ("not_stated", "") and profile.get("needs_visa_sponsorship") is not False:
+        # A candidate who holds their own visa has no use for this warning.
         flags.append("visa_not_stated")
 
     if c.get("gender_restricted"):
