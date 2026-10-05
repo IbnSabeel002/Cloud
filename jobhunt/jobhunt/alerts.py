@@ -15,6 +15,8 @@ import json
 import re
 from pathlib import Path
 
+from .score import ALERT_MARK, ALERT_SOURCE
+
 # LinkedIn sends alerts from jobalerts-noreply@linkedin.com. jobs-noreply@ is application
 # receipts and "similar jobs", which are not alerts.
 # The address must end the sender field (or its angle brackets), so "...linkedin.com.evil.example" is not accepted.
@@ -81,8 +83,8 @@ def parse_linkedin_alert(plaintext: str) -> tuple[list[dict], dict]:
             title, company = content[-3:][0:2] if len(content) >= 3 else content[:2]
             location = content[-1] if len(content) >= 3 else None
             jobs.setdefault(job_id, {
-                "source": "linkedin_alert", "source_id": job_id, "title": title, "company": company,
-                "location": location, "url": url, "posted": None,
+                "source": ALERT_SOURCE, "parsed_by": ALERT_MARK, "source_id": job_id, "title": title,
+                "company": company, "location": location, "url": url, "posted": None,
             })
             continue
         if line.startswith("<") or "<strong" in line or _FURNITURE.match(line):

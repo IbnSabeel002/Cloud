@@ -27,7 +27,7 @@ from .normalize import job_id, job_key
 from .profile import load_profile
 from .report import digest_chunks, render_report_html, render_report_md
 from .salary import parse_pay
-from .score import dedupe_candidates, evaluate, validate_candidate
+from .score import UNPARSED_ALERT, dedupe_candidates, evaluate, validate_candidate
 
 DESCRIPTION_CAP = 2500  # keep shortlist.json small enough to hand to the model
 
@@ -70,6 +70,7 @@ def pipeline(profile: dict, candidates: list, existing_rows: list, today: date) 
         "today": today.isoformat(),
         "candidates_in": len(candidates),
         "invalid": invalid,
+        "unparsed_alert_entries": sum(1 for x in invalid if UNPARSED_ALERT in x["problems"]),
         "in_batch_duplicates": in_batch_dups,
         "unique": len(unique),
         "already_seen": stats["already_seen"],
@@ -100,6 +101,7 @@ def prefilter(profile: dict, raw: list, existing_rows: list, today: date, limit:
     skipped: Counter = Counter()
     skipped["invalid"] = len(raw) - sum(1 for c in raw if not validate_candidate(c))
     skipped["duplicate"] = in_batch_dups
+    unparsed_alerts = sum(1 for c in raw if UNPARSED_ALERT in validate_candidate(c))
     skipped_ids: dict[str, list] = {}  # which jobs each count stands for, so `run` can count each job once
 
     def drop(reason: str, job: str) -> None:
@@ -124,6 +126,7 @@ def prefilter(profile: dict, raw: list, existing_rows: list, today: date, limit:
         "overflow": max(0, len(ranked) - limit),
         "skipped": {k: v for k, v in skipped.items() if v},
         "skipped_ids": skipped_ids,
+        "unparsed_alert_entries": unparsed_alerts,
         "raw_in": len(raw),
     }
 
@@ -184,6 +187,8 @@ def _fold_in_prefilter(summary: dict, need: dict, run_ids: set | None = None) ->
     skipped = need.get("skipped", {})
     skipped_ids = need.get("skipped_ids") or {}
     summary["raw_hits"] = need.get("raw_in", 0)
+    # Both commands see the same hand-typed entries only if the model re-adds them, so take the larger count.
+    summary["unparsed_alert_entries"] = max(summary.get("unparsed_alert_entries", 0), need.get("unparsed_alert_entries", 0))
     for reason, count in skipped.items():
         if run_ids and reason in skipped_ids:
             count = len(set(skipped_ids[reason]) - run_ids)

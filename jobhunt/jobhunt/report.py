@@ -127,6 +127,15 @@ def _health_line(health: list[dict] | None) -> tuple[str, bool]:
     return "Run health: " + " · ".join(parts), degraded
 
 
+def _alert_warning(summary: dict) -> str:
+    """Said out loud when alert entries were typed by hand: the script refuses them (see score.UNPARSED_ALERT)."""
+    n = int(summary.get("unparsed_alert_entries") or 0)
+    if not n:
+        return ""
+    return (f"⚠️ {n} LinkedIn alert {'entry' if n == 1 else 'entries'} typed by hand "
+            f"{'was' if n == 1 else 'were'} dropped: the parse-alert command was not used.")
+
+
 def _chunk(text: str, limit: int) -> list[str]:
     chunks, current = [], ""
     for line in text.split("\n"):
@@ -152,6 +161,8 @@ def digest_chunks(
 ) -> list[str]:
     analysis = analysis or {}
     health_line, degraded = _health_line(health)
+    alert_warning = _alert_warning(summary)
+    degraded = degraded or bool(alert_warning)
     reasons = summary.get("reject_reasons", {})
     out = []
     day = summary.get("hunt_day")
@@ -159,6 +170,8 @@ def digest_chunks(
     if degraded:
         out.append("⚠️ **Degraded run — some sources failed, so today's list may be incomplete.**")
     out.append(health_line)
+    if alert_warning:
+        out.append(alert_warning)
     if playbook_line:
         out.append(_plain(playbook_line, 100))
     out.append(
@@ -227,6 +240,7 @@ def render_report_html(
     parts = [
         f"<h1>Job hunt report · {_esc(today.strftime('%A %d %B %Y'))}</h1>",
         f"<p>{_esc(health_line)}</p>",
+        *([f"<p>{_esc(_alert_warning(summary))}</p>"] if _alert_warning(summary) else []),
         "<p>"
         f"<b>{summary['new_shortlisted']}</b> new shortlisted · {summary['already_seen']} already seen · "
         f"{summary['rejected_jobs']} screened out · {summary['below_threshold']} weak matches · "
@@ -279,6 +293,8 @@ def render_report_md(
     analysis = analysis or {}
     health_line, _ = _health_line(health)
     lines = [f"# Job hunt report · {today.isoformat()}", "", health_line, ""]
+    if _alert_warning(summary):
+        lines += [_alert_warning(summary), ""]
     lines.append(
         f"{summary['new_shortlisted']} new shortlisted · {summary['already_seen']} already seen · "
         f"{summary['rejected_jobs']} screened out · {summary['below_threshold']} weak matches"

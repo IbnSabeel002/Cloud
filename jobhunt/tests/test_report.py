@@ -303,6 +303,23 @@ class RequiredStepsTests(unittest.TestCase):
         self.assertIn("⚠️ Gmail alerts failed (not checked this run (skipped to keep the run short))", health)
         self.assertIn("Degraded run", text)
 
+    def test_hand_typed_alert_entries_are_a_visible_warning_and_a_degraded_run(self):
+        for count, words in ((1, "1 LinkedIn alert entry typed by hand was dropped"),
+                             (3, "3 LinkedIn alert entries typed by hand were dropped")):
+            summary = dict(self.r.summary, unparsed_alert_entries=count)
+            text = "\n".join(digest_chunks(summary, self.r.shortlist, HEALTHY, None, None, TODAY))
+            self.assertIn(words, text)
+            self.assertIn("the parse-alert command was not used", text)
+            self.assertIn("Degraded run", text)
+            self.assertIn(words, render_report_md(summary, self.r.shortlist, HEALTHY, None, TODAY))
+            self.assertIn(words, render_report_html(summary, self.r.shortlist, HEALTHY, None, TODAY))
+
+    def test_no_warning_when_the_parser_made_every_alert_entry(self):
+        for summary in (self.r.summary, dict(self.r.summary, unparsed_alert_entries=0)):
+            text = "\n".join(digest_chunks(summary, self.r.shortlist, HEALTHY, None, None, TODAY))
+            self.assertNotIn("typed by hand", text)
+            self.assertNotIn("Degraded", text)
+
     def test_the_playbook_line_appears_when_given_and_not_otherwise(self):
         args = (self.r.summary, self.r.shortlist, HEALTHY, None, None, TODAY)
         with_line = "\n".join(digest_chunks(*args, playbook_line="Playbook @abc1234 sha:deadbeef read 4/4"))

@@ -62,6 +62,14 @@ class Evaluation:
         return asdict(self)
 
 
+# LinkedIn alert emails are untrusted text. Only the parse-alert command may turn one into a candidate: it checks the
+# sender, keeps just title, company and place, and strips the tracking from the link. A canary run typed the leads in
+# by hand instead (no links, no sender check), so an entry without the command's mark is refused.
+ALERT_SOURCE = "linkedin_alert"
+ALERT_MARK = "parse-alert"
+UNPARSED_ALERT = "linkedin_alert entry was not made by the parse-alert command"
+
+
 def validate_candidate(c: dict) -> list[str]:
     problems = []
     if not isinstance(c, dict):
@@ -69,6 +77,8 @@ def validate_candidate(c: dict) -> list[str]:
     for required in ("title", "company"):
         if not str(c.get(required) or "").strip():
             problems.append(f"missing {required}")
+    if c.get("source") == ALERT_SOURCE and c.get("parsed_by") != ALERT_MARK:
+        problems.append(UNPARSED_ALERT)
     return problems
 
 

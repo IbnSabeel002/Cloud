@@ -130,12 +130,12 @@ Use `run_web_automation` **only** when `fetch_content` returns empty on a public
 Read only job-alert mail. Never open any other message, and never print a message body: one LinkedIn alert is about 130,000 characters, almost all of it HTML you do not need.
 
 1. **Find them.** `search_threads` with `newer_than:2d from:jobalerts-noreply@linkedin.com` (page size 20). A thread's `sender` and `subject` are enough to tell a LinkedIn alert; `jobs-noreply@` is application receipts and similar-jobs mail, which are not alerts. Skip those.
-2. **Save them.** Call `get_thread` for each alert. The result is far larger than the inline limit, so the tool **saves it to a file and tells you the path**. Do not open that file. Note the paths. (A result that comes back inline is not an alert: skip it.)
+2. **Save them.** Call `get_thread` for each alert with **only** `threadId`. **Never set `messageFormat`**: the plain-text format comes back inline, and an inline result can only be used by copying it by hand, which is exactly what the script exists to avoid (a canary run did this and typed five jobs in without their links). With the default format the result is far larger than the inline limit, so the tool **saves it to a file and tells you the path**. Do not open that file. Note the paths. If a result still comes back inline, call it again once; if it is inline again, record `Gmail alerts` as `ok: false, detail: "thread came back inline, not parsed"` and move on.
 3. **Read them with the script**, never by hand:
    ```bash
    python3 -m jobhunt parse-alert --thread <path1> <path2> ... --out $RUN/alerts.json
    ```
-   It reads only each email's plain-text part, merges the repeats (the same job appears two or three times per email and again across emails), strips the tracking from the links, and prints how many alerts and jobs it found and what it skipped. Add everything in `alerts.json` to `$RUN/raw.json` (section 5).
+   **Never type alert jobs into `raw.json` yourself.** The script marks each job it makes, and `prefilter` and `run` refuse a `linkedin_alert` entry without that mark: it is dropped, counted as `unparsed_alert_entries`, and the digest warns that alert entries typed by hand were dropped. It reads only each email's plain-text part, merges the repeats (the same job appears two or three times per email and again across emails), strips the tracking from the links, and prints how many alerts and jobs it found and what it skipped. Add everything in `alerts.json` to `$RUN/raw.json` (section 5).
 4. **Other boards' alerts** (Indeed, Bayt, GulfTalent; `from:indeed.com OR from:bayt.com OR from:gulftalent.com`): there is no script yet. Check each thread's `sender` first: the address must end with `@indeed.com`, `@bayt.com` or `@gulftalent.com`, or have one of those as its domain after a subdomain dot. Skip every other thread and count it as skipped. Take `apply_email` only from the job post itself, never from an alert's body. Read only the `plaintextBody` of each with a short Python snippet, never the HTML, extract title, company, location and link by hand, and set `source` to `indeed_alert`, `bayt_alert` or `other`.
 5. Never open a tracking link, and never open a `linkedin.com` link at all (rule 5). If there are no alert emails, record `ok: true, detail: "no alerts found (set up job alerts)"`. If Gmail answers with a sign-in or authorization error, record `ok: false, detail: "Gmail needs re-authorization"` and carry on. Do not retry. Record the counts the script printed in the health `detail` (for example `3 alerts, 9 jobs`).
 
@@ -159,8 +159,8 @@ If Firecrawl tools exist, use `firecrawl_search` (domain-filtered to bayt.com, g
 
 | Field | Value |
 |---|---|
-| `source` | `indeed`, `bayt`, `gulftalent`, `careers`, `linkedin_alert`, `indeed_alert`, `bayt_alert`, `other` |
-| `title`, `company`, `location` | as shown on the page |
+| `source` | `indeed`, `bayt`, `gulftalent`, `careers`, `linkedin_alert`, `indeed_alert`, `bayt_alert`, `other`. `linkedin_alert` entries come only from `alerts.json` |
+| `title`, `company`, `location` | exactly as shown on the page. Never reword, shorten or add a comment to a title (a canary run wrote "...(generative AI video, not a traditional social media manager role)" into one). Put comments in `why`. A card that shows no readable title is left out, not guessed |
 | `url` | the job's own link: a `viewjob?jk=` link from `indeed-links`, a `to.indeed.com` link from the connector, a Bayt job page. Never a results or search page |
 | `posted` | the date text exactly as shown ("Posted on: October 02, 2026", "16 days ago", "21 Sep") |
 | `pay_text` | the pay string exactly as shown, or `null` |

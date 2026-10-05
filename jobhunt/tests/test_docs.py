@@ -283,6 +283,21 @@ class PlaybookTests(unittest.TestCase):
         self.assertIn("are not reasons", rule)
         self.assertIn('"Skipped to keep the run short"', rule)
 
+    def test_alerts_are_only_read_by_the_script(self):
+        # Canary 2 asked Gmail for the plain-text format, got small inline results and typed the jobs in by hand.
+        self.assertIn("**Never set `messageFormat`**", PLAYBOOK)
+        self.assertIn("with **only** `threadId`", PLAYBOOK)
+        self.assertIn("thread came back inline, not parsed", PLAYBOOK)
+        self.assertIn("**Never type alert jobs into `raw.json` yourself.**", PLAYBOOK)
+        self.assertIn("`unparsed_alert_entries`", PLAYBOOK)
+        self.assertIn("`linkedin_alert` entries come only from `alerts.json`", PLAYBOOK)
+
+    def test_a_title_is_copied_never_reworded(self):
+        row = [l for l in PLAYBOOK.splitlines() if l.startswith("| `title`, `company`, `location`")][0]
+        self.assertIn("exactly as shown on the page", row)
+        self.assertIn("Never reword, shorten or add a comment to a title", row)
+        self.assertIn("left out, not guessed", row)
+
     def test_the_budget_numbers_are_ceilings_not_targets(self):
         self.assertIn("ceilings, not targets", PLAYBOOK.split("## 12. Budget per run")[1])
 

@@ -65,8 +65,10 @@ its memory of that run, skipped the playbook, and its context grew by about 190k
 
 Job titles, company names, reasons and links come from web pages and emails, so the digest treats them as data:
 URLs and email addresses are stripped from text fields, markup characters are removed, lengths are capped, and a
-link is shown only if it is a plain `https` address. A source that never reported (`Settings`, `Tracker write`) marks
-the run as degraded and shows as a warning instead of staying silent.
+link is shown only if it is a plain `https` address. A source that never reported (`Settings`, `Indeed connector`,
+`Tiny Fish pages`, `Gmail alerts`, `Tracker write`) marks the run as degraded and shows as a warning instead of staying
+silent. LinkedIn alert emails are read only by `parse-alert`: each job it makes carries a mark, and `prefilter` and `run`
+refuse a `linkedin_alert` entry without it, so one typed by hand is dropped and the digest says so.
 
 | File | Job |
 |---|---|
