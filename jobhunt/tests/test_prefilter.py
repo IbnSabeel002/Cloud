@@ -63,7 +63,7 @@ class PrefilterTests(unittest.TestCase):
         full = json.loads(FIXTURE.read_text(encoding="utf-8"))["candidates"]
         first = pipeline(self.profile, full, [], TODAY)
         again = prefilter(self.profile, raw_search_hits(), first.rows, TODAY)
-        self.assertEqual(again["skipped"]["already_seen"], 4)
+        self.assertEqual(again["skipped"]["already_seen"], 5)
         self.assertNotIn("AI Influencer Marketer", self.titles(again))
         self.assertNotIn("Lead Graphic, Motion Graphics & AI Video Specialist", self.titles(again))
 

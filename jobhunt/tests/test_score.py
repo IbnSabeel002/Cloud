@@ -444,6 +444,115 @@ class ProfileTests(unittest.TestCase):
         p["lexicon"].append("zzz")
         self.assertNotIn("zzz", load_profile()["lexicon"])
 
+    def test_the_thin_bar_may_not_exceed_the_normal_bar(self):
+        with self.assertRaises(ValueError):
+            load_profile(overrides={"thin_shortlist_threshold": 61})
+        self.assertEqual(load_profile(overrides={"thin_shortlist_threshold": 60})["thin_shortlist_threshold"], 60)
+
+
+class LocationTests(unittest.TestCase):
+    def status(self, location, **kw):
+        return evaluate(cand(location=location, **kw), DEFAULT_PROFILE, TODAY)
+
+    def test_other_countries_are_rejected(self):
+        for place, token in (("Riyadh", "riyadh"), ("Riyadh, Saudi Arabia", "riyadh"), ("Doha, Qatar", "doha"),
+                             ("Kuwait City", "kuwait"), ("Bengaluru, India", "india"), ("Hong Kong", "hong_kong")):
+            e = self.status(place)
+            self.assertEqual(e.reject_reasons, ["location:" + token], place)
+            self.assertEqual(e.status, "rejected")
+
+    def test_dubai_in_any_form_is_fine(self):
+        for place in ("Dubai", "Dubai, United Arab Emirates", "Business Bay, Dubai", "Dubai Silicon Oasis, Dubai",
+                      "United Arab Emirates", "UAE", "Al Quoz"):
+            e = self.status(place)
+            self.assertEqual(e.reject_reasons, [], place)
+            self.assertFalse([f for f in e.flags if f.startswith("outside_dubai")], place)
+
+    def test_an_empty_location_means_the_search_was_for_dubai(self):
+        e = evaluate(cand(location=None), DEFAULT_PROFILE, TODAY)
+        self.assertEqual(e.reject_reasons, [])
+        self.assertEqual(e.location, "Dubai")
+
+    def test_other_emirates_are_flagged_not_rejected(self):
+        for place, token in (("Sharjah Emirate, United Arab Emirates", "sharjah"), ("Abu Dhabi", "abu_dhabi"),
+                             ("Ras Al Khaimah", "ras_al_khaimah")):
+            e = self.status(place)
+            self.assertEqual(e.reject_reasons, [], place)
+            self.assertIn("outside_dubai:" + token, e.flags, place)
+
+    def test_a_post_that_names_dubai_and_another_emirate_is_not_flagged(self):
+        e = self.status("Dubai / Sharjah")
+        self.assertFalse([f for f in e.flags if f.startswith("outside_dubai")])
+
+    def test_a_place_name_inside_a_longer_word_does_not_match(self):
+        # "oman" sits inside "Romania"; "india" inside "Indianapolis".
+        self.assertEqual(self.status("Bucharest, Romania").reject_reasons, [])
+        self.assertEqual(self.status("Indianapolis").reject_reasons, [])
+
+    def test_the_lists_can_be_changed_in_the_profile(self):
+        allow_abu_dhabi = load_profile(overrides={"flag_locations": [], "reject_locations": ["riyadh"]})
+        e = evaluate(cand(location="Abu Dhabi"), allow_abu_dhabi, TODAY)
+        self.assertFalse([f for f in e.flags if f.startswith("outside_dubai")])
+        self.assertEqual(evaluate(cand(location="Doha"), allow_abu_dhabi, TODAY).reject_reasons, [])
+
+
+class ThinListingTests(unittest.TestCase):
+    """A listing with no job description is judged at the thin bar; one with a description is not."""
+
+    def thin(self, **kw):
+        base = dict(description="", pay_text=None, pay_source=None, posted=None, years_required=None,
+                    scope_items=[], visa_info="not_stated")
+        base.update(kw)
+        return evaluate(cand(**base), DEFAULT_PROFILE, TODAY)
+
+    def test_a_clear_title_with_nothing_else_clears_the_thin_bar(self):
+        e = self.thin(title="Social Media Manager")
+        self.assertIn("no_jd", e.flags)
+        self.assertEqual((e.score, e.status, e.strong), (50, "shortlisted", False))
+
+    def test_a_score_between_the_two_bars_shortlists_only_without_a_description(self):
+        # With a description this role scores 52: above the thin bar (50) but below the normal bar (60).
+        description = ("Look after our Instagram and use Canva to design the posts. We need someone organised "
+                       "who can plan the month ahead for the team.")
+        with_jd = self.thin(title="Social Media Manager", description=description)
+        self.assertNotIn("no_jd", with_jd.flags)
+        self.assertTrue(50 <= with_jd.score < 60, with_jd.score)
+        self.assertEqual(with_jd.status, "below_threshold")
+        # The same role with no description scores 50, and that clears the thin bar.
+        without_jd = self.thin(title="Social Media Manager")
+        self.assertEqual((without_jd.score, without_jd.status), (50, "shortlisted"))
+
+    def test_a_weak_title_stays_below_even_with_no_description(self):
+        e = self.thin(title="Marketing Manager")
+        self.assertEqual(e.status, "below_threshold")
+
+    def test_a_thin_listing_can_never_be_strong(self):
+        e = self.thin(title="Creative AI Specialist", posted="Posted on: October 05, 2026")
+        self.assertEqual(e.status, "shortlisted")
+        self.assertFalse(e.strong)
+        self.assertLess(e.score, 75)
+
+    def test_the_thin_bar_is_a_setting(self):
+        strict = load_profile(overrides={"thin_shortlist_threshold": 60})
+        e = evaluate(cand(title="Social Media Manager", description="", pay_text=None, posted=None, years_required=None,
+                          scope_items=[], visa_info="not_stated"), strict, TODAY)
+        self.assertEqual(e.status, "below_threshold")
+
+    def test_a_reject_reason_still_wins_over_the_thin_bar(self):
+        e = self.thin(title="Social Media Manager", level_label="Fresher")
+        self.assertEqual(e.status, "rejected")
+
+
+class AmpersandTests(unittest.TestCase):
+    def test_an_ampersand_reads_as_and(self):
+        self.assertEqual(title_points("Social Media & Digital Marketing Manager", "", DEFAULT_PROFILE)[0], 24)
+        self.assertEqual(title_points("Social Media and Digital Marketing Manager", "", DEFAULT_PROFILE)[0], 24)
+        self.assertEqual(title_points("AI&Automation Lead", "", DEFAULT_PROFILE)[0], 22)  # no spaces around it either
+
+    def test_the_existing_titles_keep_their_points(self):
+        self.assertEqual(title_points("AI & Automation Specialist", "", DEFAULT_PROFILE)[0], 22)
+        self.assertEqual(title_points("Social Media & AI Manager", "", DEFAULT_PROFILE)[0], 24)
+
 
 if __name__ == "__main__":
     unittest.main()

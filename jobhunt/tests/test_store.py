@@ -149,9 +149,9 @@ class CliDatabaseTests(TempDirCase):
         code = self.cli("run", "--candidates", self.candidates_file(), "--db-dir", self.dir / "does-not-exist", "--out", self.dir / "o", "--today", "2026-10-05")
         self.assertEqual(code, 0)
         summary = json.loads((self.dir / "o" / "summary.json").read_text())
-        self.assertEqual(summary["writes"], {"set": 4, "update": 0, "delete": 0})
+        self.assertEqual(summary["writes"], {"set": 5, "update": 0, "delete": 0})
         manifest = json.loads((self.dir / "o" / "writes.json").read_text())
-        self.assertEqual(sum(len(b) for b in manifest["batches"]), 4)
+        self.assertEqual(sum(len(b) for b in manifest["batches"]), 5)
 
     def test_jobs_already_in_the_database_are_not_created_again(self):
         # Two of the fixture's jobs are the same two jobs stored in the live-database fixture.
@@ -191,7 +191,7 @@ class CliDatabaseTests(TempDirCase):
         self.cli("run", "--candidates", self.candidates_file(), "--out", out, "--today", "2026-10-05")
         self.assertEqual(self.cli("report", "--out", out, "--report-url", "https://docs.example.com/d"), 0)
         doc = json.loads((out / "run_doc.json").read_text())
-        self.assertEqual((doc["Date"], doc["NewShortlisted"], doc["ReportUrl"]), ("2026-10-05", 4, "https://docs.example.com/d"))
+        self.assertEqual((doc["Date"], doc["NewShortlisted"], doc["ReportUrl"]), ("2026-10-05", 5, "https://docs.example.com/d"))
 
 
 if __name__ == "__main__":

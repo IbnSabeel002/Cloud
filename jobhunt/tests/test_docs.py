@@ -115,6 +115,21 @@ class PlaybookTests(unittest.TestCase):
             self.assertIn(phrase, PLAYBOOK, phrase)
         self.assertLess(PLAYBOOK.index("**Rate limit.**"), PLAYBOOK.index("Two quirks seen in live runs"))
 
+    def test_alerts_are_read_by_the_script_never_by_hand_and_linkedin_is_never_opened(self):
+        for phrase in ("python3 -m jobhunt parse-alert", "saves it to a file and tells you the path", "Do not open that file",
+                       "never print a message body", "never open a `linkedin.com` link at all",
+                       "Entries with `source` `linkedin_alert` are never opened", "thin_shortlist_threshold"):
+            self.assertIn(phrase, PLAYBOOK, phrase)
+        self.assertNotIn("Extract title, company, location and link. Set `source` to `linkedin_alert`", PLAYBOOK)
+
+    def test_alert_search_is_pinned_to_the_alert_sender_not_all_linkedin_mail(self):
+        # Invitations, messages and application receipts also come from linkedin.com; only alerts are wanted.
+        self.assertIn("from:jobalerts-noreply@linkedin.com", PLAYBOOK)
+        self.assertNotIn("from:linkedin.com OR", PLAYBOOK)
+
+    def test_at_most_five_alert_jobs_are_looked_up_elsewhere(self):
+        self.assertIn("at most 5 of them per run", PLAYBOOK)
+
     def test_the_candidate_file_holds_only_the_fetched_entries(self):
         # A live test run put all 58 hits in candidates.json and the digest counted jobs twice.
         self.assertIn("the entries of `need.json`'s `fetch` list", PLAYBOOK)

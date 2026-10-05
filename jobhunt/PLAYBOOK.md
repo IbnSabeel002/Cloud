@@ -115,7 +115,19 @@ Use `run_web_automation` **only** when `fetch_content` returns empty on a public
 
 ### 4.3 Gmail job alerts (read only)
 
-`search_threads` with `newer_than:2d (from:linkedin.com OR from:indeed.com OR from:bayt.com OR from:gulftalent.com) (jobs OR "job alert")`. Sender addresses and subject wording vary, so match on the domain and then **read each match to confirm it is a job alert**. Skip invitations, marketing and anything else. Use `get_thread` on the real alerts. Extract title, company, location and link. Set `source` to `linkedin_alert`, `indeed_alert` or `bayt_alert` (use `other` for the rest). Do not open tracking links. If there are no alert emails, record `ok: true, detail: "no alerts found (set up job alerts)"`. If Gmail answers with a sign-in or authorization error, record `ok: false, detail: "Gmail needs re-authorization"` and carry on. Do not retry.
+Read only job-alert mail. Never open any other message, and never print a message body: one LinkedIn alert is about 130,000 characters, almost all of it HTML you do not need.
+
+1. **Find them.** `search_threads` with `newer_than:2d from:jobalerts-noreply@linkedin.com` (page size 20). A thread's `sender` and `subject` are enough to tell a LinkedIn alert; `jobs-noreply@` is application receipts and similar-jobs mail, which are not alerts. Skip those.
+2. **Save them.** Call `get_thread` for each alert. The result is far larger than the inline limit, so the tool **saves it to a file and tells you the path**. Do not open that file. Note the paths. (A result that comes back inline is not an alert: skip it.)
+3. **Read them with the script**, never by hand:
+   ```bash
+   python3 -m jobhunt parse-alert --thread <path1> <path2> ... --out $RUN/alerts.json
+   ```
+   It reads only each email's plain-text part, merges the repeats (the same job appears two or three times per email and again across emails), strips the tracking from the links, and prints how many alerts and jobs it found and what it skipped. Add everything in `alerts.json` to `$RUN/raw.json` (section 5).
+4. **Other boards' alerts** (Indeed, Bayt, GulfTalent; `from:indeed.com OR from:bayt.com OR from:gulftalent.com`): there is no script yet. Read only the `plaintextBody` of each with a short Python snippet, never the HTML, extract title, company, location and link by hand, and set `source` to `indeed_alert`, `bayt_alert` or `other`.
+5. Never open a tracking link, and never open a `linkedin.com` link at all (rule 5). If there are no alert emails, record `ok: true, detail: "no alerts found (set up job alerts)"`. If Gmail answers with a sign-in or authorization error, record `ok: false, detail: "Gmail needs re-authorization"` and carry on. Do not retry. Record the counts the script printed in the health `detail` (for example `3 alerts, 9 jobs`).
+
+An alert gives **only title, company and place**: no pay, no description, no posting date. The script judges such a listing at a lower bar (`thin_shortlist_threshold`, 50) and the digest says "no job description captured". They are leads for the user to open, not verified matches.
 
 ### 4.4 Firecrawl (optional)
 
@@ -129,7 +141,7 @@ If Firecrawl tools exist, use `firecrawl_search` (domain-filtered to bayt.com, g
    python3 -m jobhunt prefilter --candidates $RUN/raw.json --db-dir $RUN/db --profile $RUN/profile.json --out $RUN/need.json --limit 25
    ```
    `need.json` holds `fetch` (worth opening), `overflow`, and `skipped` (why the rest were dropped). In a live test it cut 68 hits to 13.
-3. For each entry in `fetch` call `get_job_details` (Indeed) or `fetch_content` (other URLs). Fill in `description`, `pay_text`, `pay_source`, `level_label`, `years_required`, `languages_required`, `job_type`, `apply_method`, `apply_email`, `scope_items`, `visa_info`, `gender_restricted`, `extra_flags`.
+3. For each entry in `fetch` call `get_job_details` (Indeed) or `fetch_content` (other URLs). **Entries with `source` `linkedin_alert` are never opened** (rule 5): keep them exactly as `alerts.json` gave them, and only add what you can see without opening LinkedIn. For at most 5 of them per run (the best title matches, counted in the Indeed budget), you may look for the same job on Indeed with `search_jobs(search="<title> <company>")`. If a hit has the same company and the same role, take its `description`, `pay_text` and `pay_source` from `get_job_details` and keep the LinkedIn link as the `url`. If nothing matches, leave the entry thin. Fill in `description`, `pay_text`, `pay_source`, `level_label`, `years_required`, `languages_required`, `job_type`, `apply_method`, `apply_email`, `scope_items`, `visa_info`, `gender_restricted`, `extra_flags`.
 4. Save the completed `fetch` entries as `$RUN/candidates.json`: the entries of `need.json`'s `fetch` list, with the fields above filled in, and nothing else. **Do not add the hits listed under `skipped` or `overflow`.** The prefilter has already decided them and `run` counts them from `need.json`. (If you add them anyway, `run` still counts each job once, but the file is bigger and slower to read.)
 
 | Field | Value |

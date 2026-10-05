@@ -35,7 +35,7 @@ class GoldenRunTests(unittest.TestCase):
     def test_counts(self):
         s = self.s
         self.assertEqual((s["candidates_in"], s["in_batch_duplicates"], s["unique"]), (19, 2, 17))
-        self.assertEqual((s["new_shortlisted"], s["strong"], s["below_threshold"], s["rejected_jobs"]), (4, 3, 4, 9))
+        self.assertEqual((s["new_shortlisted"], s["strong"], s["below_threshold"], s["rejected_jobs"]), (5, 3, 3, 9))  # Sokin has no JD: 51 clears the thin bar of 50
         self.assertEqual(s["new_shortlisted"] + s["below_threshold"] + s["rejected_jobs"] + s["already_seen"], s["unique"])
 
     def test_reject_reason_tallies(self):
@@ -75,7 +75,7 @@ class GoldenRunTests(unittest.TestCase):
         self.assertEqual(capped.summary["outreach_keys"][0], self.result.shortlist[0]["job_id"])
 
     def test_tracker_rows_match_the_shortlist(self):
-        self.assertEqual(len(self.result.rows), 4)
+        self.assertEqual(len(self.result.rows), 5)
         self.assertEqual({r["Key"] for r in self.result.rows}, {e["job_id"] for e in self.result.shortlist})
         self.assertTrue(all(r["Status"] == "Shortlisted" for r in self.result.rows))
 
@@ -127,7 +127,7 @@ class MultiDayTests(unittest.TestCase):
         data = candidates() + [{"title": "No company here"}, "not even an object"]
         result = pipeline(load_profile(), data, [], TODAY)
         self.assertEqual(len(result.summary["invalid"]), 2)
-        self.assertEqual(result.summary["new_shortlisted"], 4)
+        self.assertEqual(result.summary["new_shortlisted"], 5)
 
     def test_empty_day_is_valid(self):
         result = pipeline(load_profile(), [], [], TODAY)
@@ -153,13 +153,13 @@ class CliTests(unittest.TestCase):
         for name in ("tracker.csv", "shortlist.json", "summary.json"):
             self.assertTrue((out / name).exists(), name)
         first = json.loads((out / "summary.json").read_text())
-        self.assertEqual(first["new_shortlisted"], 4)
+        self.assertEqual(first["new_shortlisted"], 5)
 
         out2 = self.dir / "out2"
         code = self.run_cli("run", "--candidates", FIXTURE, "--out", out2, "--tracker", out / "tracker.csv", "--today", "2026-10-05")
         self.assertEqual(code, 0)
         second = json.loads((out2 / "summary.json").read_text())
-        self.assertEqual((second["new_shortlisted"], second["already_seen"]), (0, 4))
+        self.assertEqual((second["new_shortlisted"], second["already_seen"]), (0, 5))
         self.assertEqual(second["tracker_hash"], first["tracker_hash"])
 
     def test_verify_accepts_a_round_trip_and_rejects_a_tampered_copy(self):
@@ -210,7 +210,7 @@ class CliTests(unittest.TestCase):
         out = self.dir / "out"
         self.run_cli("run", "--candidates", FIXTURE, "--out", out, "--profile", profile, "--today", "2026-10-05")
         summary = json.loads((out / "summary.json").read_text())
-        self.assertEqual(summary["new_shortlisted"], 4)  # 10,000 still clears; unlisted pay is not judged
+        self.assertEqual(summary["new_shortlisted"], 5)  # 10,000 still clears; unlisted pay is not judged
 
     def test_invalid_profile_exits_2(self):
         profile = self.dir / "profile.json"

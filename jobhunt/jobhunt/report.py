@@ -46,6 +46,8 @@ def reason_label(reason: str) -> str:
         return REASON_LABELS[reason]
     if reason.startswith("language:"):
         return "needs " + reason.split(":", 1)[1].title()
+    if reason.startswith("location:"):
+        return "based in " + reason.split(":", 1)[1].replace("_", " ").title()
     if reason.startswith("job_type:"):
         return reason.split(":", 1)[1] + " role"
     return reason
@@ -58,6 +60,8 @@ def flag_label(flag: str) -> str:
         return "pay " + flag.split(":", 1)[1].replace("_", " ")
     if flag.startswith("title_says:"):
         return "title says " + flag.split(":", 1)[1].replace("_", " ")
+    if flag.startswith("outside_dubai:"):
+        return "based in " + flag.split(":", 1)[1].replace("_", " ").title() + ", not Dubai"
     if flag.startswith("language:"):
         return flag.split(":", 1)[1].title() + " required"
     return flag

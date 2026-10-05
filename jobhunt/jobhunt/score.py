@@ -75,7 +75,8 @@ def validate_candidate(c: dict) -> list[str]:
 # ---------------------------------------------------------------- text helpers
 
 def _squash_for_matching(text: str) -> str:
-    return re.sub(r"\s+", " ", re.sub(r"[-_/]+", " ", text.lower())).strip()
+    # "&" reads as "and", so "Social Media & Digital Marketing" matches the phrase "social media and digital marketing".
+    return re.sub(r"\s+", " ", re.sub(r"[-_/]+", " ", text.lower().replace("&", " and "))).strip()
 
 
 def has_phrase(haystack: str, phrase: str) -> bool:
@@ -257,6 +258,17 @@ def evaluate(c: dict, profile: dict, today: date) -> Evaluation:
         else:
             reasons.append(f"language:{norm}")
 
+    # --- location (the candidate lives in Dubai; an empty location means the search was for Dubai)
+    place = _squash_for_matching(location)
+    if any(has_phrase(place, t) for t in profile.get("reject_locations", [])):
+        term = next(t for t in profile["reject_locations"] if has_phrase(place, t))
+        reasons.append("location:" + term.replace(" ", "_"))
+    else:
+        for term in profile.get("flag_locations", []):
+            if has_phrase(place, term) and not has_phrase(place, "dubai"):
+                flags.append("outside_dubai:" + term.replace(" ", "_"))
+                break
+
     # --- job type
     job_type = str(c.get("job_type") or "").strip().lower()
     if job_type and job_type in {t.lower() for t in profile["reject_job_types"]}:
@@ -346,9 +358,12 @@ def evaluate(c: dict, profile: dict, today: date) -> Evaluation:
     ev.reject_reasons = list(dict.fromkeys(reasons))
     ev.flags = list(dict.fromkeys(flags))
 
+    threshold = profile["shortlist_threshold"]
+    if "no_jd" in ev.flags:  # nothing to judge the skills or the scope on (see profile.py)
+        threshold = min(threshold, profile.get("thin_shortlist_threshold", threshold))
     if ev.reject_reasons:
         ev.status = "rejected"
-    elif total >= profile["shortlist_threshold"]:
+    elif total >= threshold:
         ev.status = "shortlisted"
         ev.strong = total >= profile["strong_threshold"]
     else:

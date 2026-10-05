@@ -34,7 +34,7 @@ class DigestTests(unittest.TestCase):
         self.assertIn("Mon 05 Oct 2026", text)
         self.assertIn("day 1", text)
         self.assertIn("✅ Indeed · ✅ Tiny Fish", text)
-        self.assertIn("**4 new** shortlisted", text)
+        self.assertIn("**5 new** shortlisted", text)
         self.assertIn("9 screened out", text)
         self.assertNotIn("Degraded", text)
 
@@ -95,7 +95,7 @@ class DigestTests(unittest.TestCase):
 
     def test_max_top_limits_and_mentions_the_rest(self):
         text = self.digest(max_top=2)
-        self.assertIn("and 2 more in the report", text)
+        self.assertIn("and 3 more in the report", text)
         self.assertEqual(text.count("Score "), 2)
 
     def test_fortnightly_nudge_only_on_day_14(self):
@@ -183,6 +183,8 @@ class LabelTests(unittest.TestCase):
         self.assertEqual(reason_label("stale"), "posting too old")
         self.assertEqual(reason_label("language:french"), "needs French")
         self.assertEqual(reason_label("job_type:part-time"), "part-time role")
+        self.assertEqual(reason_label("location:riyadh"), "based in Riyadh")
+        self.assertEqual(reason_label("location:hong_kong"), "based in Hong Kong")
         self.assertEqual(reason_label("something_new"), "something_new")
 
     def test_flag_labels(self):
@@ -194,6 +196,8 @@ class LabelTests(unittest.TestCase):
         self.assertEqual(flag_label("employer_mismatch"), "employer name differs from the job text")
         self.assertEqual(flag_label("title_says:part_time"), "title says part time")
         self.assertEqual(flag_label("immediate_joiner"), "wants an immediate joiner (check your notice end date)")
+        self.assertEqual(flag_label("outside_dubai:abu_dhabi"), "based in Abu Dhabi, not Dubai")
+        self.assertEqual(flag_label("outside_dubai:ras_al_khaimah"), "based in Ras Al Khaimah, not Dubai")
 
 
 if __name__ == "__main__":

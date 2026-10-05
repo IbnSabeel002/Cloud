@@ -4,6 +4,7 @@
     python -m jobhunt run    --candidates c.json --out DIR [--profile p.json] [--db-dir DIR] [--prefilter need.json] [--today YYYY-MM-DD]
     python -m jobhunt report --out DIR [--analysis a.json] [--health h.json] [--report-url URL] [--tracker-url URL] [--drafts N]
     python -m jobhunt verify --db-dir DIR --hash SHA256
+    python -m jobhunt parse-alert --thread thread1.json [thread2.json ...] --out alerts.json
     python -m jobhunt parse-pay "AED 4,000 - 5,000"
 """
 
@@ -209,6 +210,20 @@ def cmd_run(args) -> int:
     return 0
 
 
+def cmd_parse_alert(args) -> int:
+    from .alerts import parse_threads  # only this command needs it
+
+    try:
+        jobs, stats = parse_threads([Path(p) for p in args.thread])
+    except (OSError, ValueError) as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 2
+    Path(args.out).parent.mkdir(parents=True, exist_ok=True)
+    Path(args.out).write_text(json.dumps(jobs, indent=2, ensure_ascii=False), encoding="utf-8")
+    print(json.dumps(stats | {"jobs": len(jobs)}))
+    return 0
+
+
 def cmd_report(args) -> int:
     out = Path(args.out)
     summary = _read_json(str(out / "summary.json"))
@@ -286,6 +301,11 @@ def build_parser() -> argparse.ArgumentParser:
     ver.add_argument("--db-dir", help="folder written by ArtifactData list out_dir (holds jobs/*.json)")
     ver.add_argument("--hash", required=True)
     ver.set_defaults(func=cmd_verify)
+
+    alert = sub.add_parser("parse-alert", help="read saved Gmail job-alert threads into candidate jobs")
+    alert.add_argument("--thread", nargs="+", required=True, help="files written by Gmail get_thread")
+    alert.add_argument("--out", required=True)
+    alert.set_defaults(func=cmd_parse_alert)
 
     pay = sub.add_parser("parse-pay", help="debug: show how a pay string is read")
     pay.add_argument("text")

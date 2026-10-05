@@ -1,0 +1,13 @@
+{
+ "id": "fixture-linkedin_digest_with_duplicates",
+ "messageCount": 1,
+ "_note": "Real LinkedIn job-alert layout captured 2026-10-05. The reader's name, address and all tracking tokens are removed; the jobs are public postings.",
+ "messages": [
+  {
+   "sender": "jobalerts-noreply@linkedin.com",
+   "subject": "TikTok is hiring: Content Ecosystem Operation Manager - TikTok LIVE - Dubai",
+   "date": "2026-10-04T16:07:58Z",
+   "plaintextBody": "Your job alert for social media manager in Dubai\nA new job matches your preferences.\nManage alerts: https://www.linkedin.com/comm/jobs/alerts?trk=x\n\nContent Ecosystem Operation Manager - TikTok LIVE - Dubai\nTikTok\nDubai\n\nThis company is actively hiring\nApply with resume & profile\nView job: https://www.linkedin.com/comm/jobs/view/4473884059/?trk=x\n\n---------------------------------------------------------\n\nSee all jobs on LinkedIn: https://www.linkedin.com/comm/jobs/search-results/?trk=x\n\nNew jobs from your other alerts\n\n<strong class=\"font-bold\" style=\"font-weight: 600;\">social media manager</strong> jobs in United Arab Emirates\n\nSocial Media Account Manager\nNNC\nSharjah Emirate, United Arab Emirates\n\n1 school alum\nApply with resume & profile\nView job: https://www.linkedin.com/comm/jobs/view/4473447453/?trk=x\n\n---------------------------------------------------------\n\nContent Ecosystem Operation Manager - TikTok LIVE - Dubai\nTikTok\nDubai\n\nThis company is actively hiring\nApply with resume & profile\nView job: https://www.linkedin.com/comm/jobs/view/4473884059/?trk=x\n\n---------------------------------------------------------\n\nSee all jobs https://www.linkedin.com/jobs/search-results/?trk=x\nEdit alert https://www.linkedin.com/jobs/jam/manage/5155604753?trk=x\n\n<strong class=\"font-bold\" style=\"font-weight: 600;\">social media manager</strong> jobs in Dubai\n\nSocial Media Account Manager\nNNC\nSharjah Emirate, United Arab Emirates\n\n1 school alum\nApply with resume & profile\nView job: https://www.linkedin.com/comm/jobs/view/4473447453/?trk=x\n\n---------------------------------------------------------\n\nContent Ecosystem Operation Manager - TikTok LIVE - Dubai\nTikTok\nDubai\n\nThis company is actively hiring\nApply with resume & profile\nView job: https://www.linkedin.com/comm/jobs/view/4473884059/?trk=x\n\n---------------------------------------------------------\n\nSee all jobs https://www.linkedin.com/jobs/search-results/?trk=x\nEdit alert https://www.linkedin.com/jobs/jam/manage/5190934137?trk=x\n\nStand out and let hirers know when a role they’ve posted is your top choice.\nhttps://www.linkedin.com/comm/premium/products/?trk=x\n\n----------------------------------------\n"
+  }
+ ]
+}

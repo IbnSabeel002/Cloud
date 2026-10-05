@@ -24,8 +24,13 @@ DENIED_HASHES = {
     "d99038a0cb45543b2404ba2ca31939989ec83a525db475b4dab87bb530d56838",
     "148742deb6a8fc7543ea2a2e1f1f0f704934dd27ae804f93b157c43cd2dcbd57",
     "b371c27b8a3ab3e0d25cfd57beb362243653a40bd071381558d48bf4e0d2547f",
+    "411fef2d9845125ca94f41b2408c858cd30208e5a0efcb42956f129172675c60",  # the mailbox the job alerts arrive in
 }
-ALLOWED_EMAILS = {"a@gmail.com", "hr.recruit@gmail.com"}  # fake addresses used to test the free-mail rule
+# Fake addresses used to test the free-mail rule, and LinkedIn's own system addresses (sender of the alert
+# emails the parser reads and of the receipts it must skip). None of them is a person.
+ALLOWED_EMAILS = {
+    "a@gmail.com", "hr.recruit@gmail.com", "jobalerts-noreply@linkedin.com", "jobs-noreply@linkedin.com",
+}
 EMAIL = re.compile(r"[\w.+-]+@[\w-]+(?:\.[\w-]+)+")
 PHONE = re.compile(r"\+\s?971|\b05\d[\s-]?\d{3}[\s-]?\d{4}\b|\b00971")
 

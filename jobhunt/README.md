@@ -5,7 +5,8 @@ and sends you a short list. It runs every morning until you tell it to stop.
 
 ## What it does each day
 
-1. Searches Indeed UAE, Bayt, GulfTalent (partly), company career pages, and your job-alert emails.
+1. Searches Indeed UAE, Bayt, GulfTalent (partly), company career pages, and your job-alert emails
+   (LinkedIn alerts are read by a script that takes the title, company and place from each email).
 2. Drops duplicates, stale posts (older than 21 days), fresher/entry/junior roles, wrong-language roles,
    part-time/freelance roles, pay under your floor, and scam patterns.
 3. Scores what is left out of 100 and sorts it into pay tiers.
@@ -120,6 +121,9 @@ cat /tmp/demo/digest_1.txt
 
 - Coverage is Indeed UAE and Bayt, plus GulfTalent in part. LinkedIn is the biggest UAE source and appears only
   if you create daily job alerts for your titles in Dubai.
+- LinkedIn alerts carry only a title, a company and a place: no pay, no description, no date. Those jobs are judged at a
+  lower bar (50, not 60) and the digest says so. They are leads for you to open, not verified matches. The agent never
+  opens LinkedIn itself. Jobs outside the UAE are dropped; other emirates are flagged.
 - Indeed's connector shows no pay. The agent opens each plausible job to find it, up to 25 a day.
 - A daily run driven by a model is not perfectly repeatable. The package and the health line limit the damage.
   A failed source shows up as a warning in the digest instead of a silent gap.

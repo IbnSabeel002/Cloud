@@ -1,0 +1,13 @@
+{
+ "id": "fixture-application-receipt",
+ "messageCount": 1,
+ "_note": "SYNTHETIC. The shape of LinkedIn's 'application sent' email, which is not a job alert and must be skipped.",
+ "messages": [
+  {
+   "sender": "jobs-noreply@linkedin.com",
+   "subject": "Your application was sent to Example Co",
+   "date": "2026-10-05T10:00:00Z",
+   "plaintextBody": "Your application was sent to Example Co\nDigital Marketing Specialist\nExample Co\nDubai, United Arab Emirates\nView job: https://www.linkedin.com/comm/jobs/view/1000000001/?trk=x\n---------------------------------------------------------\nApplied on October 5, 2026\nView similar jobs you may be interested in\nSocial Media Specialist\nOther Example Co\nDubai\nView job: https://www.linkedin.com/comm/jobs/view/1000000002/?trk=x\n---------------------------------------------------------\n"
+  }
+ ]
+}

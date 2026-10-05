@@ -19,6 +19,9 @@ DEFAULT_PROFILE: dict = {
     # Screening.
     "stale_days": 21,
     "shortlist_threshold": 60,
+    # A listing with no job description (a job-alert email gives title, company and place only) cannot earn the
+    # skills points and has no pay, so it is judged on the title and the rest. Pay and skills are checked by the user.
+    "thin_shortlist_threshold": 50,
     "strong_threshold": 75,
     "max_outreach": 5,
     "prune_days": 30,
@@ -26,6 +29,13 @@ DEFAULT_PROFILE: dict = {
     "languages": ["english"],
     "languages_flag_only": ["arabic"],
     "needs_visa_sponsorship": None,
+    # Places that rule a job out (the candidate lives in Dubai), and other UAE places that only get a flag.
+    "reject_locations": [
+        "riyadh", "jeddah", "dammam", "khobar", "saudi arabia", "saudi", "ksa", "doha", "qatar", "kuwait",
+        "bahrain", "manama", "muscat", "oman", "cairo", "egypt", "amman", "jordan", "beirut", "lebanon",
+        "india", "pakistan", "karachi", "lahore", "london", "united kingdom", "singapore", "hong kong",
+    ],
+    "flag_locations": ["abu dhabi", "al ain", "ras al khaimah", "fujairah", "umm al quwain", "sharjah", "ajman"],
     "watchlist_companies": [],
     "reject_level_terms": [
         "fresher", "entry level", "entry-level", "junior", "intern", "internship",
@@ -48,6 +58,7 @@ DEFAULT_PROFILE: dict = {
         {"points": 24, "phrases": [
             "social media manager", "head of social", "social media lead", "social media and ai",
             "social media and marketing manager", "social media marketing manager",
+            "social media and digital marketing",
         ]},
         {"points": 22, "phrases": [
             "marketing operations", "marketing automation", "digital transformation",
@@ -95,5 +106,7 @@ def _validate(profile: dict) -> None:
         raise ValueError("salary policy must satisfy floor <= tier_b <= tier_a")
     if not (0 <= profile["shortlist_threshold"] <= profile["strong_threshold"] <= 100):
         raise ValueError("thresholds must satisfy 0 <= shortlist <= strong <= 100")
+    if not (0 <= profile["thin_shortlist_threshold"] <= profile["shortlist_threshold"]):
+        raise ValueError("thin_shortlist_threshold must satisfy 0 <= thin <= shortlist")
     if profile["stale_days"] < 1:
         raise ValueError("stale_days must be at least 1")
