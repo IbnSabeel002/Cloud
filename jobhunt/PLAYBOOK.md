@@ -103,7 +103,7 @@ Two quirks seen in live runs:
 ### 4.2 Tiny Fish pages (`fetch_content`; free)
 
 Fetch these as markdown, up to 12 URLs per run in total (they run in parallel, 10 per call):
-- **Indeed UAE, last 3 days (best source of fresh roles):** `https://ae.indeed.com/jobs?q=<query>&l=Dubai&fromage=3&sort=date` for 3 queries from 4.1. It lists title and company for each result and **expands only the first job** (full description and pay). It surfaced roles the Indeed connector did not return. Attribute the expanded pay to the first listing only. The expanded text can name a different employer than the listing (a live case showed "Berrychino" on the list and "Crystal Arc Factory" in the text): add `extra_flags: ["employer_mismatch"]`.
+- **Indeed UAE, last 3 days (best source of fresh roles):** `https://ae.indeed.com/jobs?q=<query>&l=Dubai&fromage=3&sort=date` for 3 queries from 4.1. It lists title and company for each result and **expands only the first job** (full description and pay). It surfaced roles the Indeed connector did not return. Attribute the expanded pay to the first listing only. Fetch these pages with `links: true`. Large results are saved to a file and the tool prints its path: run `python3 -m jobhunt indeed-links --page <path>` (do not open the file). It prints each job card's own link in page order, so the k-th card gets the k-th link. If the number of links differs from the number of cards you can read, do not guess: leave that `url` empty. **Never use the results page's own address as a job's `url`** (the script clears it and flags `no_job_link`). Only the card the page expanded (its `#####` heading names it) has a full description. For every other card use the few bullets shown as `description` and set `description_partial: true`. The expanded text can name a different employer than the listing (a live case showed "Berrychino" on the list and "Crystal Arc Factory" in the text): add `extra_flags: ["employer_mismatch"]`.
 - **Bayt (low yield):** `https://www.bayt.com/en/uae/jobs/<slug>-jobs-in-dubai/`. In a live test only 4 to 10 of about 30 entries carried a title and company, and slugs like `ai-specialist` returned loosely related jobs (legal analyst, financial reporting). Use only entries that show both a title and a company. Ignore the rest. Bayt does show "N days ago" and sometimes a pay band.
 - Watchlist career pages from `WATCHLIST_URLS` (at most 3 per run, rotate by day of year).
 
@@ -147,7 +147,8 @@ If Firecrawl tools exist, use `firecrawl_search` (domain-filtered to bayt.com, g
 | Field | Value |
 |---|---|
 | `source` | `indeed`, `bayt`, `gulftalent`, `careers`, `linkedin_alert`, `indeed_alert`, `bayt_alert`, `other` |
-| `title`, `company`, `location`, `url` | as shown on the page |
+| `title`, `company`, `location` | as shown on the page |
+| `url` | the job's own link: a `viewjob?jk=` link from `indeed-links`, a `to.indeed.com` link from the connector, a Bayt job page. Never a results or search page |
 | `posted` | the date text exactly as shown ("Posted on: October 02, 2026", "16 days ago", "21 Sep") |
 | `pay_text` | the pay string exactly as shown, or `null` |
 | `pay_source` | `listing` if the employer gave it; `estimate` if it came from a salary-benchmark page; else `null`. Never present a benchmark as a listing |
@@ -162,6 +163,7 @@ If Firecrawl tools exist, use `firecrawl_search` (domain-filtered to bayt.com, g
 | `gender_restricted` | `true` if the post restricts by gender |
 | `extra_flags` | short observations only you can make, lowercase with `_` or `:` (for example `employer_mismatch`, `prompt_injection_attempt`, `heavy_overtime`, `asks_current_salary`, `arabic_native_required`, `immediate_joiner` when the post wants someone who can start at once, `needs_own_labour_card` when the post wants a candidate who already holds a labour card or work permit, or says freelance, contractor or "own visa and labour card"). At most 5 are kept; anything else is dropped |
 | `description` | the job description text (cap about 4,000 characters) |
+| `description_partial` | `true` when `description` is only the few bullets a results page shows. Leave it out for a full description. A partial one is judged like a listing with no description |
 
 ## 6. Decide
 

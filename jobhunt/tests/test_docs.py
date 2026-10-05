@@ -150,6 +150,14 @@ class PlaybookTests(unittest.TestCase):
     def test_at_most_five_alert_jobs_are_looked_up_elsewhere(self):
         self.assertIn("at most 5 of them per run", PLAYBOOK)
 
+    def test_a_results_page_is_never_a_jobs_link_and_a_snippet_is_never_a_description(self):
+        # A live run stored the Indeed search address as a job's link and scored three bullets as a full description.
+        for phrase in ("python3 -m jobhunt indeed-links --page", "the k-th card gets the k-th link",
+                       "Never use the results page's own address as a job's `url`", "`no_job_link`",
+                       "`description_partial`", "set `description_partial: true`",
+                       "Never a results or search page", "`links: true`"):
+            self.assertIn(phrase, PLAYBOOK, phrase)
+
     def test_the_candidate_file_holds_only_the_fetched_entries(self):
         # A live test run put all 58 hits in candidates.json and the digest counted jobs twice.
         self.assertIn("the entries of `need.json`'s `fetch` list", PLAYBOOK)

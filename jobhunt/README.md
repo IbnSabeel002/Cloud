@@ -129,6 +129,8 @@ cat /tmp/demo/digest_1.txt
 - LinkedIn alerts carry only a title, a company and a place: no pay, no description, no date. Those jobs are judged at a
   lower bar (50, not 60) and the digest says so. They are leads for you to open, not verified matches. The agent never
   opens LinkedIn itself. Jobs outside the UAE are dropped; other emirates are flagged.
+- A results page shows only a few bullets per job. Those are judged like a listing with no description, and a job
+  is only ever linked by its own address, never by the search page it was found on.
 - Indeed's connector shows no pay. The agent opens each plausible job to find it, up to 25 a day.
 - A daily run driven by a model is not perfectly repeatable. The package and the health line limit the damage.
   A failed source shows up as a warning in the digest instead of a silent gap.

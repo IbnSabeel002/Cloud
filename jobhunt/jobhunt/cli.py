@@ -5,6 +5,7 @@
     python -m jobhunt report --out DIR [--analysis a.json] [--health h.json] [--report-url URL] [--tracker-url URL] [--drafts N]
     python -m jobhunt verify --db-dir DIR --hash SHA256
     python -m jobhunt parse-alert --thread thread1.json [thread2.json ...] --out alerts.json
+    python -m jobhunt indeed-links --page fetched.json
     python -m jobhunt availability --card card.json [--today YYYY-MM-DD]
     python -m jobhunt parse-pay "AED 4,000 - 5,000"
 """
@@ -225,6 +226,18 @@ def cmd_parse_alert(args) -> int:
     return 0
 
 
+def cmd_indeed_links(args) -> int:
+    from .indeed_links import links_by_page  # only this command needs it
+
+    try:
+        pages = links_by_page(Path(args.page))
+    except (OSError, ValueError) as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 2
+    print(json.dumps(pages))
+    return 0
+
+
 def cmd_availability(args) -> int:
     from .availability import availability_line  # only this command needs it
 
@@ -322,6 +335,10 @@ def build_parser() -> argparse.ArgumentParser:
     alert.add_argument("--thread", nargs="+", required=True, help="files written by Gmail get_thread")
     alert.add_argument("--out", required=True)
     alert.set_defaults(func=cmd_parse_alert)
+
+    il = sub.add_parser("indeed-links", help="list each job card's own link, in page order, from a saved Indeed results page")
+    il.add_argument("--page", required=True, help="a file written by Tiny Fish fetch_content (with links turned on)")
+    il.set_defaults(func=cmd_indeed_links)
 
     avail = sub.add_parser("availability", help="print the sentence about when the candidate can start, for today")
     avail.add_argument("--card", required=True, help="the merged candidate card (JSON)")
