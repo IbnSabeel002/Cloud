@@ -231,6 +231,11 @@ class PlaybookTests(unittest.TestCase):
         for phrase in ("**Clean up.**", "rm -rf /tmp/jobhunt-run/db", "/tmp/jobhunt-run/card.json"):
             self.assertIn(phrase, PLAYBOOK, phrase)
 
+    def test_without_strengths_there_is_no_outreach(self):
+        # The CV summary lives in the settings document, not in the immutable prompt. If the read fails, say nothing about the person.
+        self.assertIn("If `strengths` is empty after the merge", PLAYBOOK)
+        self.assertIn("create no Gmail drafts", PLAYBOOK.split("If `strengths` is empty")[1].split("\n")[0])
+
     def test_the_final_message_may_be_wrapped_in_tags_by_the_prompt(self):
         self.assertIn("wrap it in tags such as `<digest>`", PLAYBOOK)
 

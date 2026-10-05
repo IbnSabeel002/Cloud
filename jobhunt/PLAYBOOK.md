@@ -201,6 +201,8 @@ Fit: High | Medium | Low
 Positioning: <one short paragraph: how to present the candidate for this role>
 ```
 
+If `strengths` is empty after the merge (the settings could not be read and the prompt's card holds none), write no `email_note` and no `linkedin_note`, create no Gmail drafts, and say in `gaps` that the candidate's strengths were unavailable. Never write about the candidate from anything but the merged card.
+
 Writing rules: simple English. Short sentences. No flattery. No buzzwords. One real proof point from the card, never an invented one. `linkedin_note` is at most 300 characters and ends with a question. `email_note` is at most 150 words, with a subject line on the first line. Include `portfolio_url` if the card has one. If it does not, write `[portfolio link]` and add "Add a portfolio link to the CV" to `cv_tweaks`. Run `python3 -m jobhunt availability --card $RUN/card.json`. If it prints a line, put that line in the `email_note` as printed, and never write a start date of your own (the script keeps it true as the days pass). Do not mention the visa or the labour card unless the post asks about them; then use `visa_note` as written. When the portfolio does not show the work the post asks for (for example AI video, automation or agent work), say so in `gaps` and name the one piece to add; do not claim the portfolio shows it. `cv_tweaks` is 2 to 3 concrete edits for this role. If a form asks for the candidate's current salary, advise answering with the expected salary only.
 
 ## 8. Persist (in this order)
