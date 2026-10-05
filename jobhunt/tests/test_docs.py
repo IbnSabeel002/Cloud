@@ -72,6 +72,13 @@ class PlaybookTests(unittest.TestCase):
         self.assertIn("A wrong version is safe", PLAYBOOK)
         self.assertIn("nothing is written", PLAYBOOK)
 
+    def test_slack_is_opt_in_and_the_final_message_is_the_fallback(self):
+        # The Slack workspace is a work account whose admins may read DMs, so it is off unless the user says so.
+        self.assertIn("Slack is opt-in", PLAYBOOK)
+        self.assertIn("`SLACK_USER_ID` is `none`", PLAYBOOK)
+        self.assertIn("final message", PLAYBOOK)
+        self.assertIn("--drafts", PLAYBOOK)  # the digest claims only drafts that exist
+
     def test_stateless_fallback_is_documented(self):
         self.assertIn("stateless", PLAYBOOK)
         self.assertIn("tracker unavailable", PLAYBOOK)
