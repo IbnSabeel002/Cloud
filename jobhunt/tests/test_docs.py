@@ -85,6 +85,12 @@ class PlaybookTests(unittest.TestCase):
         self.assertIn("Do not conclude a tool is missing", PLAYBOOK)
         self.assertIn("mcp__claude-code-remote__update_trigger", PLAYBOOK)
 
+    def test_the_agent_can_find_its_own_trigger_when_no_id_was_given(self):
+        # A trigger's prompt can only be edited from the conversation it posts into, so the id may never get filled in.
+        self.assertIn("__TRIGGER_ID__", PLAYBOOK)
+        self.assertIn("list_triggers", PLAYBOOK)
+        self.assertIn("Daily job hunt (Dubai)", PLAYBOOK)
+
     def test_a_long_lived_worker_treats_each_wake_up_as_a_cold_start(self):
         self.assertIn("long-lived worker session", PLAYBOOK)
         self.assertIn("cold start", PLAYBOOK)

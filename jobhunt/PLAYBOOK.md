@@ -32,7 +32,7 @@ Tools below are named by their short names. If one is deferred, load it with Too
 | `TRACKER_URL` | the tracker page (an Artifact) whose database is the agent's memory |
 | `SLACK_USER_ID` | the user's own Slack id, or `none` (Slack off, the default) |
 | `DRIVE_FOLDER_NAME` | private Drive folder for the daily reports (default `Job Hunt Agent`) |
-| `TRIGGER_ID` | this Routine's id, used to stop it |
+| `TRIGGER_ID` | this Routine's id, used to stop it. If it is missing, `lookup` or still shows `__TRIGGER_ID__`, find it with `list_triggers`: the routine named `Daily job hunt (Dubai)` |
 | `HUNT_START` | date the hunt began (YYYY-MM-DD) |
 | `WATCHLIST_URLS` | optional career-page URLs to check |
 | `QUERIES` | optional override of the search queries in 4.1 |
@@ -199,7 +199,7 @@ Writing rules: simple English. Short sentences. No flattery. No buzzwords. One r
 
 If `summary.stop.stop` is true (a job's status is `Accepted`):
 1. DM: `You marked <job> as Accepted. I'm stopping the daily job hunt now. Tell me if you want it back on.`
-2. `update_trigger(trigger_id=TRIGGER_ID, enabled=false)`, then confirm with `get_trigger` that it is disabled.
+2. Resolve `TRIGGER_ID` if needed (see section 1), then `update_trigger(trigger_id=TRIGGER_ID, enabled=false)` and confirm with `get_trigger` that it is disabled.
 
 You never decide a job is "good enough". Only the user does, by setting a job to `Accepted` on the tracker page or by telling Claude to stop.
 
