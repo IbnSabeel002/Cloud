@@ -38,6 +38,7 @@ FLAG_LABELS = {
     "arabic_native_required": "native Arabic required",
     "emirati_preferred": "Emirati preferred",
     "immediate_joiner": "wants an immediate joiner (check your notice end date)",
+    "needs_own_labour_card": "wants you to bring your own labour card (yours must come from the new employer)",
 }
 
 

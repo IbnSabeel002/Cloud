@@ -196,6 +196,8 @@ class LabelTests(unittest.TestCase):
         self.assertEqual(flag_label("employer_mismatch"), "employer name differs from the job text")
         self.assertEqual(flag_label("title_says:part_time"), "title says part time")
         self.assertEqual(flag_label("immediate_joiner"), "wants an immediate joiner (check your notice end date)")
+        self.assertEqual(flag_label("needs_own_labour_card"),
+                         "wants you to bring your own labour card (yours must come from the new employer)")
         self.assertEqual(flag_label("outside_dubai:abu_dhabi"), "based in Abu Dhabi, not Dubai")
         self.assertEqual(flag_label("outside_dubai:ras_al_khaimah"), "based in Ras Al Khaimah, not Dubai")
 

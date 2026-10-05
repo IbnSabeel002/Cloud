@@ -5,6 +5,7 @@
     python -m jobhunt report --out DIR [--analysis a.json] [--health h.json] [--report-url URL] [--tracker-url URL] [--drafts N]
     python -m jobhunt verify --db-dir DIR --hash SHA256
     python -m jobhunt parse-alert --thread thread1.json [thread2.json ...] --out alerts.json
+    python -m jobhunt availability --card card.json [--today YYYY-MM-DD]
     python -m jobhunt parse-pay "AED 4,000 - 5,000"
 """
 
@@ -224,6 +225,21 @@ def cmd_parse_alert(args) -> int:
     return 0
 
 
+def cmd_availability(args) -> int:
+    from .availability import availability_line  # only this command needs it
+
+    try:
+        card = _read_json(args.card)
+        today = date.fromisoformat(args.today) if args.today else dubai_today()
+        if not isinstance(card, dict):
+            raise ValueError("the card must be a JSON object")
+    except (OSError, ValueError) as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 2
+    print(availability_line(card, today) or "")
+    return 0
+
+
 def cmd_report(args) -> int:
     out = Path(args.out)
     summary = _read_json(str(out / "summary.json"))
@@ -306,6 +322,11 @@ def build_parser() -> argparse.ArgumentParser:
     alert.add_argument("--thread", nargs="+", required=True, help="files written by Gmail get_thread")
     alert.add_argument("--out", required=True)
     alert.set_defaults(func=cmd_parse_alert)
+
+    avail = sub.add_parser("availability", help="print the sentence about when the candidate can start, for today")
+    avail.add_argument("--card", required=True, help="the merged candidate card (JSON)")
+    avail.add_argument("--today")
+    avail.set_defaults(func=cmd_availability)
 
     pay = sub.add_parser("parse-pay", help="debug: show how a pay string is read")
     pay.add_argument("text")

@@ -12,7 +12,7 @@ and sends you a short list. It runs every morning until you tell it to stop.
 3. Scores what is left out of 100 and sorts it into pay tiers.
 4. Writes a gap analysis and outreach drafts for the strong ones (score 75 or more, at most 5 a day).
 5. Saves new jobs to your private tracker page, writes a full report to a private Google Drive folder,
-   and sends a digest to your Slack DM.
+   and sends a digest to your own Slack DM (when Slack is on).
 
 ## What it never does
 
@@ -96,9 +96,14 @@ writes nothing, so it can never overwrite an edit you just made.
   the private tracker database (document `config/candidate`) and take effect on the next run. A Routine's own prompt
   cannot be edited after it is created, which is why the settings are not kept there. None of it is in git.
 - **What the agent knows about you** comes from your CV plus what you told it: English only (a post that *requires*
-  Arabic is dropped; "Arabic is a plus" is kept), you hold your own visa (so "visa not stated" is never raised and
-  "no visa provided" is never a reason to drop a post), you are serving a notice period (end date unknown, so it is
-  never quoted), and your portfolio link goes into outreach drafts.
+  Arabic is dropped; "Arabic is a plus" is kept); you hold a UAE visa with an NOC, so you need no visa sponsorship
+  ("visa not stated" is never raised and "no visa provided" is never a reason to drop a post) but the new employer must
+  issue a labour card (a post that wants you to bring your own labour card is flagged); your notice period ends by a
+  date you gave (`notice_ends_by`), and a small script turns it into the right sentence for today ("ends by Friday
+  9 October", later "available to join immediately") so a draft never states a stale date; and your portfolio link goes
+  into outreach drafts.
+- **Slack:** on, to your own DM only (`slack_user_id` in the same settings document). The workspace is a work account
+  whose admins may read DMs. To turn it off, tell Claude; the digest then arrives only as the run's final message.
 - **Day 14, 28, …:** the digest asks if you are still hunting.
 
 ## Run the tests
