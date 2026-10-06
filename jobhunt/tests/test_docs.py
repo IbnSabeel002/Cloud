@@ -342,6 +342,14 @@ class ReadmeTests(unittest.TestCase):
         real = {p.stem for p in (ROOT / "jobhunt").glob("*.py") if p.stem not in ("__init__", "__main__")}
         self.assertEqual(listed, real)
 
+    def test_readme_explains_the_watchdog_and_its_limits(self):
+        for phrase in ("## The watchdog", "09:17 Dubai time", "It reads only; it never changes anything",
+                       "`⚠️ Watchdog could not check`", "`Slack not checked`",
+                       "whether the daily routine is switched on", "looks like one that died",
+                       "If both routines stop at once", "`WATCHDOG.md`", "watchdog-prompt",
+                       "switch this routine off as well"):
+            self.assertIn(phrase, README, phrase)
+
     def test_readme_explains_the_dispatcher_and_the_gate(self):
         for phrase in ("DAILY RUN DISPATCH", "fresh worker subagent", "playbook --chunk N", "exit code 2",
                        "12 hours", "JOBHUNT_SKIP_PLAYBOOK_GATE", "Untrusted text in the digest"):
