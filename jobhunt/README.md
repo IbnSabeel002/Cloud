@@ -25,24 +25,66 @@ and sends you a short list. It runs every morning until you tell it to stop.
 ## How the pieces fit
 
 ```
-Routine (daily, 07:47 Dubai) -> PLAYBOOK.md -> sources -> jobhunt package -> tracker page + Drive report + Gmail drafts + Slack
-                                 (the model)    (pages)    (the decisions)    (private)
+Routine (daily, 07:47 Dubai)
+   -> dispatcher session (does nothing except start one worker)
+        -> a NEW worker subagent every day (empty memory)
+             -> clones this repo, reads PLAYBOOK.md through the gate
+             -> sources -> jobhunt package -> tracker page + Drive report + Gmail drafts + Slack
 ```
 
 The model reads pages and writes the prose. The `jobhunt` package makes every decision that has to be exact:
 pay parsing, dates, de-duplication, filters, scoring and which database writes are needed. It is plain Python
 with no installs, and it is tested.
 
+### Why a dispatcher and a new worker every day
+
+The first design woke one long-lived session each morning. That session drifted: after the first run it worked from
+its memory of that run, skipped the playbook, and its context grew by about 190k tokens a run. So now:
+
+- The routine wakes a **dispatcher** that has one job: start a **fresh worker subagent** with the run prompt, then pass
+  its digest on unchanged. It does not search, fetch, read or decide anything. A message that does not start with
+  `DAILY RUN DISPATCH` is not a wake-up and is ignored.
+- The worker has no memory of earlier days. It clones this repo into a new folder and reads the playbook from that
+  clone, not from any copy lying around.
+- State that has to survive between days lives in the private tracker database, never in a session.
+
+### The playbook gate
+
+"Read the playbook first" is a rule a model can skip, so it is also a check the code makes:
+
+- `python3 -m jobhunt playbook --chunk N` prints the playbook in numbered chunks of about 7,500 characters. Each
+  chunk ends with where it is and what comes next. Reading chunk 1 starts a new receipt.
+- `prefilter`, `run` and `report` **refuse to run** (exit code 2) until every chunk of the current playbook has been read
+  in the last 12 hours. A playbook that changed after it was read does not count.
+- The digest carries a line such as `Playbook @abc1234 sha:1f2e3d4c read 5/5` and the run record stores it. The
+  dispatcher adds a warning to the digest if that line is missing.
+- `playbook --section N` re-prints one section for a quick check without touching the receipt.
+- Tests set `JOBHUNT_SKIP_PLAYBOOK_GATE=1`. Never set it in a routine.
+
+### Untrusted text in the digest
+
+Job titles, company names, reasons and links come from web pages and emails, so the digest treats them as data:
+URLs and email addresses are stripped from text fields, markup characters are removed, lengths are capped, and a
+link is shown only if it is a plain `https` address. A source that never reported (`Settings`, `Indeed connector`,
+`Tiny Fish pages`, `Gmail alerts`, `Tracker write`) marks the run as degraded and shows as a warning instead of staying
+silent. LinkedIn alert emails are read only by `parse-alert`: each job it makes carries a mark, and `prefilter` and `run`
+refuse a `linkedin_alert` entry without it, so one typed by hand is dropped and the digest says so.
+
 | File | Job |
 |---|---|
-| `PLAYBOOK.md` | the step-by-step runbook the daily session follows |
+| `PLAYBOOK.md` | the step-by-step runbook the daily worker follows |
 | `jobhunt/salary.py` | turns "AED 5K - AED 11K/mo" into a monthly range |
 | `jobhunt/dates.py` | reads "16 days ago", "21 Sep", "Posted on: October 02, 2026" |
 | `jobhunt/normalize.py` | makes the same job on two boards one row |
 | `jobhunt/score.py` | filters and scoring |
+| `jobhunt/profile.py` | the settings and their checks |
+| `jobhunt/alerts.py` | reads LinkedIn alert emails (exact sender check, tracking links removed) |
+| `jobhunt/indeed_links.py` | matches each result-page card to its own job link |
+| `jobhunt/availability.py` | turns the notice end date into the right sentence for today |
 | `jobhunt/tracker.py` | the merge rules: what to keep, add, update and prune |
 | `jobhunt/store.py` | turns those rules into the exact database writes |
 | `jobhunt/report.py` | the Slack digest and the report |
+| `jobhunt/playbook_gate.py` | serves the playbook in chunks and keeps the receipt |
 | `jobhunt/cli.py` | the commands the playbook calls |
 | `profile.example.json` | a generic example of the settings |
 

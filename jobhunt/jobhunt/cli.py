@@ -5,6 +5,7 @@
     python -m jobhunt report --out DIR [--analysis a.json] [--health h.json] [--report-url URL] [--tracker-url URL] [--drafts N]
     python -m jobhunt verify --db-dir DIR --hash SHA256
     python -m jobhunt parse-alert --thread thread1.json [thread2.json ...] --out alerts.json
+    python -m jobhunt playbook --chunk N | --section N | --receipt
     python -m jobhunt indeed-links --page fetched.json
     python -m jobhunt availability --card card.json [--today YYYY-MM-DD]
     python -m jobhunt parse-pay "AED 4,000 - 5,000"
@@ -21,11 +22,12 @@ from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 
 from . import store, tracker
+from . import playbook_gate
 from .normalize import job_id, job_key
 from .profile import load_profile
 from .report import digest_chunks, render_report_html, render_report_md
 from .salary import parse_pay
-from .score import dedupe_candidates, evaluate, validate_candidate
+from .score import UNPARSED_ALERT, dedupe_candidates, evaluate, validate_candidate
 
 DESCRIPTION_CAP = 2500  # keep shortlist.json small enough to hand to the model
 
@@ -68,6 +70,7 @@ def pipeline(profile: dict, candidates: list, existing_rows: list, today: date) 
         "today": today.isoformat(),
         "candidates_in": len(candidates),
         "invalid": invalid,
+        "unparsed_alert_entries": sum(1 for x in invalid if UNPARSED_ALERT in x["problems"]),
         "in_batch_duplicates": in_batch_dups,
         "unique": len(unique),
         "already_seen": stats["already_seen"],
@@ -98,6 +101,7 @@ def prefilter(profile: dict, raw: list, existing_rows: list, today: date, limit:
     skipped: Counter = Counter()
     skipped["invalid"] = len(raw) - sum(1 for c in raw if not validate_candidate(c))
     skipped["duplicate"] = in_batch_dups
+    unparsed_alerts = sum(1 for c in raw if UNPARSED_ALERT in validate_candidate(c))
     skipped_ids: dict[str, list] = {}  # which jobs each count stands for, so `run` can count each job once
 
     def drop(reason: str, job: str) -> None:
@@ -122,6 +126,7 @@ def prefilter(profile: dict, raw: list, existing_rows: list, today: date, limit:
         "overflow": max(0, len(ranked) - limit),
         "skipped": {k: v for k, v in skipped.items() if v},
         "skipped_ids": skipped_ids,
+        "unparsed_alert_entries": unparsed_alerts,
         "raw_in": len(raw),
     }
 
@@ -150,7 +155,18 @@ def _load_existing(args) -> tuple[list, list]:
     return [], []
 
 
+def _gate_blocks() -> bool:
+    """True (after printing why) when the playbook has not been read in full. See playbook_gate."""
+    message = playbook_gate.gate()
+    if message:
+        print(f"error: {message}", file=sys.stderr)
+        return True
+    return False
+
+
 def cmd_prefilter(args) -> int:
+    if _gate_blocks():
+        return 2
     today = date.fromisoformat(args.today) if args.today else dubai_today()
     profile = load_profile(args.profile)
     existing, _ = _load_existing(args)
@@ -171,6 +187,8 @@ def _fold_in_prefilter(summary: dict, need: dict, run_ids: set | None = None) ->
     skipped = need.get("skipped", {})
     skipped_ids = need.get("skipped_ids") or {}
     summary["raw_hits"] = need.get("raw_in", 0)
+    # Both commands see the same hand-typed entries only if the model re-adds them, so take the larger count.
+    summary["unparsed_alert_entries"] = max(summary.get("unparsed_alert_entries", 0), need.get("unparsed_alert_entries", 0))
     for reason, count in skipped.items():
         if run_ids and reason in skipped_ids:
             count = len(set(skipped_ids[reason]) - run_ids)
@@ -186,6 +204,8 @@ def _fold_in_prefilter(summary: dict, need: dict, run_ids: set | None = None) ->
 
 
 def cmd_run(args) -> int:
+    if _gate_blocks():
+        return 2
     today = date.fromisoformat(args.today) if args.today else dubai_today()
     profile = load_profile(args.profile)
     candidates = _load_candidates(args.candidates)
@@ -226,6 +246,22 @@ def cmd_parse_alert(args) -> int:
     return 0
 
 
+def cmd_playbook(args) -> int:
+    try:
+        if args.receipt:
+            ok, line, _ = playbook_gate.status()
+            print(line)
+            return 0 if ok else 1
+        if args.section is not None:
+            print(playbook_gate.section(args.section))
+        else:
+            print(playbook_gate.read_chunk(args.chunk))
+    except (OSError, ValueError) as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 2
+    return 0
+
+
 def cmd_indeed_links(args) -> int:
     from .indeed_links import links_by_page  # only this command needs it
 
@@ -254,20 +290,23 @@ def cmd_availability(args) -> int:
 
 
 def cmd_report(args) -> int:
+    if _gate_blocks():
+        return 2
     out = Path(args.out)
     summary = _read_json(str(out / "summary.json"))
     shortlist = _read_json(str(out / "shortlist.json"))
     analysis = _read_json(args.analysis) if args.analysis and Path(args.analysis).exists() else {}
     health = _read_json(args.health) if args.health and Path(args.health).exists() else None
     today = date.fromisoformat(summary["today"])
+    playbook = playbook_gate.receipt_line()
     chunks = digest_chunks(summary, shortlist, health, analysis, args.report_url, today, tracker_url=args.tracker_url,
-                           drafts_created=args.drafts)
+                           drafts_created=args.drafts, playbook_line=playbook)
     for i, chunk in enumerate(chunks, 1):
         (out / f"digest_{i}.txt").write_text(chunk, encoding="utf-8")
     (out / "report.html").write_text(render_report_html(summary, shortlist, health, analysis, today), encoding="utf-8")
     (out / "report.md").write_text(render_report_md(summary, shortlist, health, analysis, today), encoding="utf-8")
     (out / "run_doc.json").write_text(
-        json.dumps(store.run_doc(summary, health, args.report_url), ensure_ascii=False), encoding="utf-8")
+        json.dumps(store.run_doc(summary, health, args.report_url, playbook), ensure_ascii=False), encoding="utf-8")
     print(json.dumps({"digest_files": len(chunks), "report": ["report.html", "report.md"], "run_doc": "run_doc.json"}))
     return 0
 
@@ -335,6 +374,13 @@ def build_parser() -> argparse.ArgumentParser:
     alert.add_argument("--thread", nargs="+", required=True, help="files written by Gmail get_thread")
     alert.add_argument("--out", required=True)
     alert.set_defaults(func=cmd_parse_alert)
+
+    pb = sub.add_parser("playbook", help="print the playbook in numbered chunks and record the read (the other commands check it)")
+    which = pb.add_mutually_exclusive_group(required=True)
+    which.add_argument("--chunk", type=int, help="print chunk N of the playbook and record that it was read")
+    which.add_argument("--section", type=int, help="print section N again (does not change the receipt)")
+    which.add_argument("--receipt", action="store_true", help="print the receipt line; exit 1 unless every chunk was read")
+    pb.set_defaults(func=cmd_playbook)
 
     il = sub.add_parser("indeed-links", help="list each job card's own link, in page order, from a saved Indeed results page")
     il.add_argument("--page", required=True, help="a file written by Tiny Fish fetch_content (with links turned on)")

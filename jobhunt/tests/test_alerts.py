@@ -8,9 +8,9 @@ from datetime import date
 from pathlib import Path
 
 from jobhunt.alerts import canonical_url, parse_linkedin_alert, parse_threads
-from jobhunt.cli import main, pipeline
+from jobhunt.cli import _fold_in_prefilter, main, pipeline, prefilter
 from jobhunt.profile import load_profile
-from jobhunt.score import evaluate
+from jobhunt.score import ALERT_MARK, UNPARSED_ALERT, evaluate, validate_candidate
 
 FIXTURES = Path(__file__).parent / "fixtures" / "alerts"
 TODAY = date(2026, 10, 5)
@@ -192,6 +192,70 @@ class CliTests(unittest.TestCase):
         code, _, err = self.run_cli("parse-alert", "--thread", "/no/such/file.json", "--out", "/tmp/never.json")
         self.assertEqual(code, 2)
         self.assertIn("error", err)
+
+
+class AlertProvenanceTests(unittest.TestCase):
+    """Only the parse-alert command may make a linkedin_alert entry. A canary run typed them in by hand instead:
+    no links and no sender check, so an entry without the command's mark is refused and counted."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.parsed, _ = parse_threads([fixture("linkedin_digest_four_jobs")])
+        cls.profile = load_profile(overrides={"languages_flag_only": [], "needs_visa_sponsorship": False})
+
+    def hand_typed(self):
+        return {"source": "linkedin_alert", "title": "Social Media Manager", "company": "Acme Typed By Hand",
+                "location": "Dubai", "url": None}
+
+    def test_every_parsed_job_carries_the_mark_and_is_valid(self):
+        self.assertTrue(self.parsed)
+        for job in self.parsed:
+            self.assertEqual(job["parsed_by"], ALERT_MARK)
+            self.assertEqual(validate_candidate(job), [])
+
+    def test_a_hand_typed_alert_entry_is_refused(self):
+        self.assertEqual(validate_candidate(self.hand_typed()), [UNPARSED_ALERT])
+
+    def test_a_wrong_mark_is_refused_too(self):
+        self.assertEqual(validate_candidate(dict(self.hand_typed(), parsed_by="me")), [UNPARSED_ALERT])
+
+    def test_other_sources_do_not_need_the_mark(self):
+        for source in ("indeed", "bayt", "indeed_alert", "bayt_alert", "other"):
+            self.assertEqual(validate_candidate(dict(self.hand_typed(), source=source)), [], source)
+
+    def test_the_pipeline_drops_and_counts_hand_typed_entries(self):
+        result = pipeline(self.profile, self.parsed + [self.hand_typed()], [], TODAY)
+        self.assertEqual(result.summary["unparsed_alert_entries"], 1)
+        self.assertEqual(result.summary["unique"], len(self.parsed))
+        self.assertNotIn("Acme Typed By Hand", [e["company"] for e in result.shortlist])
+        self.assertNotIn("Acme Typed By Hand", [r["Company"] for r in result.rows])
+
+    def test_a_clean_run_counts_none(self):
+        self.assertEqual(pipeline(self.profile, self.parsed, [], TODAY).summary["unparsed_alert_entries"], 0)
+
+    def test_the_prefilter_drops_and_counts_them_too(self):
+        need = prefilter(self.profile, self.parsed + [self.hand_typed()], [], TODAY)
+        self.assertEqual(need["unparsed_alert_entries"], 1)
+        self.assertNotIn("Acme Typed By Hand", [c["company"] for c in need["fetch"]])
+        self.assertEqual(prefilter(self.profile, self.parsed, [], TODAY)["unparsed_alert_entries"], 0)
+
+    def test_the_funnel_takes_the_larger_count_so_a_re_added_entry_is_not_counted_twice(self):
+        summary = {"already_seen": 0, "reject_reasons": {}, "rejected_jobs": 0, "unparsed_alert_entries": 1}
+        _fold_in_prefilter(summary, {"unparsed_alert_entries": 1, "raw_in": 5})
+        self.assertEqual(summary["unparsed_alert_entries"], 1)
+        _fold_in_prefilter(summary, {"unparsed_alert_entries": 3, "raw_in": 5})
+        self.assertEqual(summary["unparsed_alert_entries"], 3)
+
+    def test_the_command_line_run_reports_the_count(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            cand = Path(tmp) / "c.json"
+            cand.write_text(json.dumps(self.parsed + [self.hand_typed()]))
+            buf = io.StringIO()
+            with contextlib.redirect_stdout(buf):
+                code = main(["run", "--candidates", str(cand), "--out", str(Path(tmp) / "out"), "--today", "2026-10-05"])
+            self.assertEqual(code, 0)
+            summary = json.loads((Path(tmp) / "out" / "summary.json").read_text())
+            self.assertEqual(summary["unparsed_alert_entries"], 1)
 
 
 class AlertJobsThroughThePipelineTests(unittest.TestCase):
