@@ -9,6 +9,7 @@
     python -m jobhunt indeed-links --page fetched.json
     python -m jobhunt availability --card card.json [--today YYYY-MM-DD]
     python -m jobhunt parse-pay "AED 4,000 - 5,000"
+    python -m jobhunt slack-record (--sent LINK [LINK ...] | --state off|failed|unconfirmed) --out FILE
     python -m jobhunt watchdog-prompt --tracker-url URL --dispatcher-session ID [--out FILE]
                                      [--test-date YYYY-MM-DD --test-from HHMM --test-to HHMM]
 """
@@ -23,8 +24,7 @@ from dataclasses import dataclass
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 
-from . import store, tracker
-from . import playbook_gate
+from . import playbook_gate, slack_record, store, tracker
 from .normalize import job_id, job_key
 from .profile import load_profile
 from .report import digest_chunks, render_report_html, render_report_md
@@ -339,6 +339,19 @@ def cmd_watchdog_prompt(args) -> int:
     return 0
 
 
+def cmd_slack_record(args) -> int:
+    if args.sent:
+        now = datetime.fromisoformat(args.now) if args.now else None
+        if now is not None and now.tzinfo is None:
+            raise ValueError("--now needs a time zone, for example 2026-10-07T04:00:00+00:00")
+        doc = slack_record.sent_doc(args.sent, now)
+    else:
+        doc = slack_record.state_doc(args.state)
+    Path(args.out).write_text(json.dumps(doc, ensure_ascii=False), encoding="utf-8")
+    print(json.dumps(doc))
+    return 0
+
+
 def cmd_parse_pay(args) -> int:
     pay = parse_pay(args.text)
     print(json.dumps(None if pay is None else {
@@ -407,6 +420,15 @@ def build_parser() -> argparse.ArgumentParser:
     avail.add_argument("--card", required=True, help="the merged candidate card (JSON)")
     avail.add_argument("--today")
     avail.set_defaults(func=cmd_availability)
+
+    sr = sub.add_parser("slack-record", help="write the run record's note about the Slack message (SlackSent, SlackMessages)")
+    how = sr.add_mutually_exclusive_group(required=True)
+    how.add_argument("--sent", nargs="+", metavar="REF",
+                     help="one Slack message link or timestamp per digest message that the send tool returned")
+    how.add_argument("--state", choices=slack_record.STATES, help="no message to prove: Slack is off, the send failed, or it could not be confirmed")
+    sr.add_argument("--out", required=True, help="the JSON file to write")
+    sr.add_argument("--now", help="tests only: the current time as ISO 8601 with a time zone")
+    sr.set_defaults(func=cmd_slack_record)
 
     pay = sub.add_parser("parse-pay", help="debug: show how a pay string is read")
     pay.add_argument("text")

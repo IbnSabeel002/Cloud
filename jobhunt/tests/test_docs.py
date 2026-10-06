@@ -306,6 +306,24 @@ class PlaybookTests(unittest.TestCase):
             self.assertIn("Accepted", doc)
             self.assertIn("update_trigger" if doc is PLAYBOOK else "stop the job hunt", doc)
 
+    def test_the_slack_note_is_written_only_by_the_script_and_only_after_the_message_went_out(self):
+        notify = PLAYBOOK.split("## 9. Notify")[1].split("## 10. Stop check")[0]
+        persist = PLAYBOOK.split("## 8. Persist")[1].split("## 9. Notify")[0]
+        for phrase in ("Record the Slack result", "python3 -m jobhunt slack-record --sent",
+                       "Keep the `message_ts` of every message that went out", "or its `message_link`",
+                       "--state unconfirmed", "--state failed", "--state off", "only the script writes it",
+                       "do not guess", 'ArtifactData(action="update"', 'collection="runs"',
+                       "<the version from section 8 step 4>", "A wrong version is safe", "Never record the note any other way"):
+            self.assertIn(phrase, notify, phrase)
+        self.assertIn("Keep the `version` the result shows", persist)
+        self.assertIn("never type it yourself", PLAYBOOK.split("## 1. Inputs")[0])
+        self.assertLess(notify.index("slack_send_message("), notify.index("Record the Slack result"))
+        self.assertIn("record `--state failed`", PLAYBOOK.split("## 11. Failure handling")[1])
+
+    def test_a_run_with_slack_off_still_records_that_it_is_off(self):
+        notify = PLAYBOOK.split("## 9. Notify")[1].split("## 10. Stop check")[0]
+        self.assertIn("go to step 5 with `--state off`", notify)
+
 
 class ProfileExampleTests(unittest.TestCase):
     def setUp(self):
@@ -344,7 +362,7 @@ class ReadmeTests(unittest.TestCase):
 
     def test_readme_explains_the_watchdog_and_its_limits(self):
         for phrase in ("## The watchdog", "09:17 Dubai time", "It reads only; it never changes anything",
-                       "`⚠️ Watchdog could not check`", "`Slack not checked`",
+                       "`⚠️ Watchdog could not check`", "`SlackSent`", "`slack-record` script",
                        "whether the daily routine is switched on", "looks like one that died",
                        "If both routines stop at once", "`WATCHDOG.md`", "watchdog-prompt",
                        "switch this routine off as well"):

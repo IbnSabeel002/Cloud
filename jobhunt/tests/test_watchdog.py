@@ -5,6 +5,7 @@ import io
 import re
 import tempfile
 import unittest
+from datetime import datetime, timezone
 from pathlib import Path
 
 from jobhunt import watchdog
@@ -142,7 +143,8 @@ class SafetyRuleTests(unittest.TestCase):
         self.assertNotIn("slack_", prompt)
         self.assertNotIn("OWNER_SLACK_ID", prompt)
         self.assertNotIn("Message TS", prompt)
-        self.assertIn("· Slack not checked", prompt)
+        self.assertNotIn("Slack not checked", prompt)
+        self.assertIn("Slack <SLACK> (run's note)", prompt)
 
     def test_it_never_asks_for_the_routine_it_cannot_read(self):
         prompt = watchdog.render(VALUES)
@@ -218,7 +220,8 @@ class QuietnessAndAccuracyRuleTests(unittest.TestCase):
         self.assertIn("One source with ok false is NOT a finding", PROMPT)
         self.assertIn("Indeed connector, Tiny Fish pages and Gmail alerts all have ok false", PROMPT)
         self.assertIn("Known limits, do not promise more", PROMPT)
-        self.assertIn("it does not check that the Slack message arrived", PROMPT)
+        self.assertIn("it cannot see Slack itself (it reads only the run's own note)", PROMPT)
+        self.assertIn("SlackSent off is NOT a finding", PROMPT)
         self.assertIn("it cannot see whether the daily routine is switched on", PROMPT)
 
     def test_the_required_health_names_match_what_the_daily_run_must_report(self):
@@ -230,6 +233,34 @@ class QuietnessAndAccuracyRuleTests(unittest.TestCase):
             squashed = re.sub(r"\W", "", name.lower())
             self.assertTrue(any(k in squashed for k in keywords), f"{name} is not covered by the watchdog's name check")
 
+    def test_the_slack_note_the_run_writes_is_the_one_the_watchdog_reads(self):
+        from jobhunt import slack_record
+        step3 = PROMPT.split("3. Record check")[1].split("4. Final message")[0]
+        self.assertIn("SlackSent", step3)
+        for state in slack_record.STATES:
+            self.assertIn(state, step3, state)
+        now = datetime(2026, 10, 7, 4, 0, tzinfo=timezone.utc)
+        doc = slack_record.sent_doc([f"{int(now.timestamp()) - 120}.000001"], now)
+        self.assertEqual(set(doc), {"SlackSent", "SlackMessages"})
+        self.assertRegex(doc["SlackSent"], r"^([01]\d|2[0-3]):[0-5]\d$")
+        self.assertEqual(doc["SlackSent"], "07:58")
+        self.assertIn("a 24-hour time like `07:58`", step3)
+
+    def test_each_slack_problem_has_its_own_plain_sentence_and_off_is_not_a_problem(self):
+        for sentence in ("The job hunt did not record whether its Slack message went out.",
+                         "The job hunt could not send its Slack message.",
+                         "The job hunt could not confirm that its Slack message went out."):
+            self.assertIn(f"`{sentence}`", PROMPT, sentence)
+        self.assertIn("SlackSent off is NOT a finding", PROMPT)
+        self.assertIn("SLACK is `sent <time>` when SlackSent is a time, or `off`.", PROMPT)
+
+    def test_the_ok_line_says_whose_word_the_slack_time_is_and_fits_a_phone_line(self):
+        ok = [l for l in PROMPT.splitlines() if l.strip().startswith("OK · <TODAY>")][0].strip()
+        example = (ok.replace("<TODAY>", "2026-10-07").replace("<HH:MM>", "07:52").replace("<UP>", "3")
+                   .replace("<SLACK>", "sent 07:58"))
+        self.assertIn("(run's note)", example)
+        self.assertLessEqual(len(example), 100, example)
+
     def test_the_real_playbook_line_has_the_shape_the_watchdog_looks_for(self):
         from jobhunt.playbook_gate import sha8
         line = f"Playbook @abc1234 sha:{sha8('text')} read 5/5"
@@ -237,13 +268,13 @@ class QuietnessAndAccuracyRuleTests(unittest.TestCase):
 
     def test_every_finding_sentence_fits_on_a_phone_line(self):
         sentences = {s for s in re.findall(r"`([^`]{20,}\.)`", PROMPT) if s[0].isupper()}
-        self.assertGreaterEqual(len(sentences), 8)
+        self.assertGreaterEqual(len(sentences), 11)
         for sentence in sentences:
             self.assertLessEqual(len(sentence) + 2, 100, sentence)
 
     def test_the_three_final_message_shapes_are_exact(self):
         for phrase in (
-            "OK · <TODAY> · run <HH:MM> recorded, <UP> of 3 sources up · Slack not checked",
+            "OK · <TODAY> · run <HH:MM>, <UP> of 3 sources up, Slack <SLACK> (run's note)",
             "⚠️ Watchdog could not check · <TODAY>",
             "The job hunt itself may be fine.",
             "⚠️ Job hunt ALERT · <TODAY>",
@@ -323,7 +354,8 @@ class DocumentTests(unittest.TestCase):
             self.assertIn(phrase, FLAT_DOC, phrase)
 
     def test_the_limits_are_stated_plainly_to_the_owner(self):
-        for phrase in ("Whether the Slack message arrived", "`Slack not checked`",
+        for phrase in ("Whether the Slack message really arrived", "`SlackSent`",
+                       "A run that wrote a false note would pass",
                        "An organisation setting stops a routine from being given the Slack connector",
                        "Whether the daily routine is switched on", "has the database tool but no routine tools",
                        "looks the same as one that died",
