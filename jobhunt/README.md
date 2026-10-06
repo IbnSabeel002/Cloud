@@ -85,8 +85,25 @@ refuse a `linkedin_alert` entry without it, so one typed by hand is dropped and 
 | `jobhunt/store.py` | turns those rules into the exact database writes |
 | `jobhunt/report.py` | the Slack digest and the report |
 | `jobhunt/playbook_gate.py` | serves the playbook in chunks and keeps the receipt |
+| `jobhunt/watchdog.py` | fills the watchdog prompt template (`WATCHDOG.md`) with your private values |
 | `jobhunt/cli.py` | the commands the playbook calls |
 | `profile.example.json` | a generic example of the settings |
+
+## The watchdog
+
+A second, separate routine runs at 09:17 Dubai time and checks that the 07:47 hunt really happened. It sends one short
+message to your phone and email. It reads only; it never changes anything.
+
+- **It checks:** the daily routine is switched on and started today; today's run left a record in the tracker that shows
+  the whole playbook was read and at least one source worked; and today's Slack message from the hunt exists, is from you,
+  and falls in the right time window around that record.
+- **What you see:** one `OK` line on a healthy day; `⚠️ Job hunt ALERT` with plain reasons when something is wrong;
+  `⚠️ Watchdog could not check` when it could not look something up (the hunt itself may be fine); `STOPPED` when the daily
+  routine is switched off, so a stopped hunt is never reported as healthy.
+- **What it cannot see:** whether the jobs are good, or whether data was typed by hand or a source was skipped (the digest
+  warns about those). If both routines stop at once (a connector expiry, a paused plan), nothing arrives.
+- **Where it lives:** `WATCHDOG.md` holds the prompt, the setup and the test plan. `python3 -m jobhunt watchdog-prompt`
+  fills in your private values (none of them are in git). If you finish your search, switch this routine off as well.
 
 ## Pay tiers
 

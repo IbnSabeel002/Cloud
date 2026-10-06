@@ -9,6 +9,7 @@
     python -m jobhunt indeed-links --page fetched.json
     python -m jobhunt availability --card card.json [--today YYYY-MM-DD]
     python -m jobhunt parse-pay "AED 4,000 - 5,000"
+    python -m jobhunt watchdog-prompt --tracker-url URL --trigger-id ID --slack-id ID --dispatcher-session ID [--out FILE]
 """
 
 from __future__ import annotations
@@ -322,6 +323,21 @@ def cmd_verify(args) -> int:
     return 0 if ok else 1
 
 
+def cmd_watchdog_prompt(args) -> int:
+    from . import watchdog  # only this command needs it
+
+    prompt = watchdog.render({
+        "TRACKER_URL": args.tracker_url, "DAILY_TRIGGER_ID": args.trigger_id,
+        "OWNER_SLACK_ID": args.slack_id, "DISPATCHER_SESSION": args.dispatcher_session,
+    })
+    if args.out:
+        Path(args.out).write_text(prompt, encoding="utf-8")
+        print(f"wrote {args.out} ({len(prompt)} characters)")
+    else:
+        sys.stdout.write(prompt)
+    return 0
+
+
 def cmd_parse_pay(args) -> int:
     pay = parse_pay(args.text)
     print(json.dumps(None if pay is None else {
@@ -394,6 +410,14 @@ def build_parser() -> argparse.ArgumentParser:
     pay = sub.add_parser("parse-pay", help="debug: show how a pay string is read")
     pay.add_argument("text")
     pay.set_defaults(func=cmd_parse_pay)
+
+    wd = sub.add_parser("watchdog-prompt", help="print the watchdog routine's prompt with your private values filled in")
+    wd.add_argument("--tracker-url", required=True)
+    wd.add_argument("--trigger-id", required=True, help="the daily job-hunt routine's id")
+    wd.add_argument("--slack-id", required=True, help="your own Slack user id")
+    wd.add_argument("--dispatcher-session", required=True, help="the daily dispatcher session id")
+    wd.add_argument("--out", help="write to this file instead of printing")
+    wd.set_defaults(func=cmd_watchdog_prompt)
     return p
 
 
