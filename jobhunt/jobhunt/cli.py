@@ -9,7 +9,7 @@
     python -m jobhunt indeed-links --page fetched.json
     python -m jobhunt availability --card card.json [--today YYYY-MM-DD]
     python -m jobhunt parse-pay "AED 4,000 - 5,000"
-    python -m jobhunt watchdog-prompt --tracker-url URL --trigger-id ID --slack-id ID --dispatcher-session ID [--out FILE]
+    python -m jobhunt watchdog-prompt --tracker-url URL --trigger-id ID --dispatcher-session ID [--out FILE]
                                      [--test-date YYYY-MM-DD --test-from HHMM --test-to HHMM]
 """
 
@@ -332,7 +332,7 @@ def cmd_watchdog_prompt(args) -> int:
         test = {"date": args.test_date, "from": args.test_from, "to": args.test_to}
     prompt = watchdog.render({
         "TRACKER_URL": args.tracker_url, "DAILY_TRIGGER_ID": args.trigger_id,
-        "OWNER_SLACK_ID": args.slack_id, "DISPATCHER_SESSION": args.dispatcher_session,
+        "DISPATCHER_SESSION": args.dispatcher_session,
     }, test)
     if args.out:
         Path(args.out).write_text(prompt, encoding="utf-8")
@@ -418,7 +418,6 @@ def build_parser() -> argparse.ArgumentParser:
     wd = sub.add_parser("watchdog-prompt", help="print the watchdog routine's prompt with your private values filled in")
     wd.add_argument("--tracker-url", required=True)
     wd.add_argument("--trigger-id", required=True, help="the daily job-hunt routine's id")
-    wd.add_argument("--slack-id", required=True, help="your own Slack user id")
     wd.add_argument("--dispatcher-session", required=True, help="the daily dispatcher session id")
     wd.add_argument("--out", help="write to this file instead of printing")
     wd.add_argument("--test-date", help="make a TEST build that checks this date (YYYY-MM-DD); also needs --test-from and --test-to")
