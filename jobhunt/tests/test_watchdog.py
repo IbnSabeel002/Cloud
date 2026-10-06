@@ -253,6 +253,12 @@ class QuietnessAndAccuracyRuleTests(unittest.TestCase):
             self.assertIn(f"`{sentence}`", PROMPT, sentence)
         self.assertIn("SlackSent off is NOT a finding", PROMPT)
         self.assertIn("SLACK is `sent <time>` when SlackSent is a time, or `off`.", PROMPT)
+        step3 = PROMPT.split("3. Record check")[1].split("4. Final message")[0]
+        self.assertRegex(step3, r"SlackSent is failed: `The job hunt could not send its Slack message\.`")
+        self.assertRegex(step3, r"SlackSent is unconfirmed: `The job hunt could not confirm that its Slack message went out\.`")
+        self.assertRegex(step3, r"SlackSent missing, or anything other than a 24-hour time like `07:58` or one of the words "
+                                r"off, failed, unconfirmed: `The job hunt did not record whether its Slack message went out\.`")
+        self.assertNotRegex(step3, r"SlackSent is off:")  # off has no sentence: it is not a problem
 
     def test_the_ok_line_says_whose_word_the_slack_time_is_and_fits_a_phone_line(self):
         ok = [l for l in PROMPT.splitlines() if l.strip().startswith("OK · <TODAY>")][0].strip()
@@ -360,7 +366,9 @@ class DocumentTests(unittest.TestCase):
                        "Whether the daily routine is switched on", "has the database tool but no routine tools",
                        "looks the same as one that died",
                        "typed by hand or a source was skipped", "If both routines stop at once",
-                       "only known after the first live test"):
+                       "Delivery is not proven", "Mobile push requested", "This has not worked yet",
+                       "Rolling out the Slack note", "wait for one daily run whose record has `SlackSent`",
+                       "30 minutes", "`off` is the owner's own choice and raises none"):
             self.assertIn(phrase, FLAT_DOC, phrase)
 
 

@@ -96,6 +96,26 @@ class SentDocTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             sent_doc([link(2), ts(120)], NOW)
 
+    def test_the_number_of_messages_must_match_the_digests_the_run_had_to_send(self):
+        self.assertEqual(sent_doc([link(3), link(2)], NOW, expect=2)["SlackMessages"], 2)
+        with self.assertRaises(ValueError) as why:
+            sent_doc([link(3)], NOW, expect=2)
+        self.assertIn("1 different Slack message(s)", str(why.exception))
+        with self.assertRaises(ValueError):
+            sent_doc([link(3), ts(3)], NOW, expect=2)  # the same message twice is still one message
+        with self.assertRaises(ValueError):
+            sent_doc([link(3), link(2)], NOW, expect=1)
+
+    def test_the_edges_of_the_window_are_exact(self):
+        limit = MAX_AGE.total_seconds() / 60
+        sent_doc([ts(limit - 0.1)], NOW)
+        with self.assertRaises(ValueError):
+            sent_doc([ts(limit + 0.1)], NOW)
+        ahead = slack_record.MAX_AHEAD.total_seconds() / 60
+        sent_doc([ts(-(ahead - 0.1))], NOW)
+        with self.assertRaises(ValueError):
+            sent_doc([ts(-(ahead + 0.1))], NOW)
+
     def test_no_message_is_refused_with_a_clear_reason(self):
         with self.assertRaises(ValueError) as why:
             sent_doc([], NOW)
@@ -119,7 +139,19 @@ class StateDocTests(unittest.TestCase):
                 state_doc(state)
 
 
+def real_ts(minutes_ago: float) -> str:
+    """A Slack message timestamp this many minutes before the real current time."""
+    moment = datetime.now(timezone.utc) - timedelta(minutes=minutes_ago)
+    return f"{int(moment.timestamp())}.{moment.microsecond:06d}"
+
+
+def dubai_time_of(ref: str) -> str:
+    return message_time(ref).astimezone(slack_record.DUBAI).strftime("%H:%M")
+
+
 class CommandTests(unittest.TestCase):
+    """The command runs on the real clock, as it does in the daily run: there is no way to give it another one."""
+
     def run_cli(self, *argv):
         out, err = io.StringIO(), io.StringIO()
         with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
@@ -127,42 +159,89 @@ class CommandTests(unittest.TestCase):
         return code, out.getvalue(), err.getvalue()
 
     def test_sent_writes_the_document_the_playbook_merges_into_the_run_record(self):
+        first, second = real_ts(3), real_ts(2)
         with tempfile.TemporaryDirectory() as tmp:
             target = Path(tmp) / "run_slack.json"
-            code, out, _ = self.run_cli("slack-record", "--sent", link(3), link(2), "--out", str(target), "--now", NOW.isoformat())
+            code, out, _ = self.run_cli("slack-record", "--sent", first, second, "--expect", "2", "--out", str(target))
             self.assertEqual(code, 0)
             written = json.loads(target.read_text(encoding="utf-8"))
-            self.assertEqual(written, {"SlackSent": "07:58", "SlackMessages": 2})
+            self.assertEqual(written, {"SlackSent": dubai_time_of(second), "SlackMessages": 2})
             self.assertEqual(json.loads(out), written)
 
     def test_a_state_writes_a_word(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            target = Path(tmp) / "run_slack.json"
-            code, _, _ = self.run_cli("slack-record", "--state", "unconfirmed", "--out", str(target))
-            self.assertEqual(code, 0)
-            self.assertEqual(json.loads(target.read_text(encoding="utf-8")), {"SlackSent": "unconfirmed", "SlackMessages": 0})
-
-    def test_a_made_up_or_old_reference_exits_2_and_writes_nothing(self):
-        for ref in ("made up", ts(120), "08:00"):
+        for state in ("off", "failed", "unconfirmed"):
             with tempfile.TemporaryDirectory() as tmp:
                 target = Path(tmp) / "run_slack.json"
-                code, out, err = self.run_cli("slack-record", "--sent", ref, "--out", str(target), "--now", NOW.isoformat())
+                code, _, _ = self.run_cli("slack-record", "--state", state, "--out", str(target))
+                self.assertEqual(code, 0)
+                self.assertEqual(json.loads(target.read_text(encoding="utf-8")), {"SlackSent": state, "SlackMessages": 0})
+
+    def test_a_made_up_or_old_reference_exits_2_and_writes_nothing(self):
+        for ref in ("made up", real_ts(120), "08:00"):
+            with tempfile.TemporaryDirectory() as tmp:
+                target = Path(tmp) / "run_slack.json"
+                code, out, err = self.run_cli("slack-record", "--sent", ref, "--expect", "1", "--out", str(target))
                 self.assertEqual(code, 2, ref)
                 self.assertEqual(out, "")
                 self.assertTrue(err.startswith("error:"), err)
                 self.assertFalse(target.exists(), ref)
 
-    def test_a_time_without_a_time_zone_is_refused(self):
+    def test_a_refusal_never_leaves_an_earlier_days_note_behind(self):
+        # The playbook merges this file into today's run record: a stale one would pass for today's.
+        yesterday = {"SlackSent": "07:58", "SlackMessages": 1}
+        for argv in (["--sent", "made up", "--expect", "1"], ["--sent", real_ts(120), "--expect", "1"],
+                     ["--sent", real_ts(1), "--expect", "2"], ["--sent", real_ts(1)]):
+            with tempfile.TemporaryDirectory() as tmp:
+                target = Path(tmp) / "run_slack.json"
+                target.write_text(json.dumps(yesterday), encoding="utf-8")
+                code, _, _ = self.run_cli("slack-record", *argv, "--out", str(target))
+                self.assertEqual(code, 2, argv)
+                self.assertFalse(target.exists(), f"stale note survived {argv}")
+
+    def test_a_good_run_replaces_an_earlier_days_note(self):
         with tempfile.TemporaryDirectory() as tmp:
-            code, _, err = self.run_cli("slack-record", "--sent", ts(2), "--out", str(Path(tmp) / "x.json"), "--now", "2026-10-07T04:00:00")
+            target = Path(tmp) / "run_slack.json"
+            target.write_text(json.dumps({"SlackSent": "07:58", "SlackMessages": 1}), encoding="utf-8")
+            ref = real_ts(1)
+            self.assertEqual(self.run_cli("slack-record", "--state", "failed", "--out", str(target))[0], 0)
+            self.assertEqual(json.loads(target.read_text(encoding="utf-8"))["SlackSent"], "failed")
+            self.assertEqual(self.run_cli("slack-record", "--sent", ref, "--expect", "1", "--out", str(target))[0], 0)
+            self.assertEqual(json.loads(target.read_text(encoding="utf-8"))["SlackSent"], dubai_time_of(ref))
+
+    def test_sent_needs_the_number_of_digests_and_it_must_match(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            target = Path(tmp) / "run_slack.json"
+            one, two = real_ts(2), real_ts(1)
+            code, _, err = self.run_cli("slack-record", "--sent", one, "--out", str(target))
             self.assertEqual(code, 2)
-            self.assertIn("time zone", err)
+            self.assertIn("--expect", err)
+            self.assertEqual(self.run_cli("slack-record", "--sent", one, "--expect", "2", "--out", str(target))[0], 2)
+            self.assertEqual(self.run_cli("slack-record", "--sent", one, one, "--expect", "2", "--out", str(target))[0], 2)
+            self.assertFalse(target.exists())
+            self.assertEqual(self.run_cli("slack-record", "--sent", one, two, "--expect", "2", "--out", str(target))[0], 0)
+
+    def test_a_file_that_cannot_be_written_is_a_clear_error_not_a_traceback(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            missing_folder = str(Path(tmp) / "no" / "such" / "run_slack.json")
+            code, out, err = self.run_cli("slack-record", "--state", "off", "--out", missing_folder)
+            self.assertEqual((code, out), (2, ""))
+            self.assertTrue(err.startswith("error: cannot write"), err)
+            code, out, err = self.run_cli("slack-record", "--state", "off", "--out", tmp)  # a folder, not a file
+            self.assertEqual((code, out), (2, ""))
+            self.assertTrue(err.startswith("error:"), err)
+
+    def test_the_command_cannot_be_given_another_clock(self):
+        with self.assertRaises(SystemExit) as stopped, contextlib.redirect_stderr(io.StringIO()):
+            main(["slack-record", "--sent", real_ts(1), "--expect", "1", "--out", "/tmp/never-written.json",
+                  "--now", "2026-10-07T04:00:00+00:00"])
+        self.assertEqual(stopped.exception.code, 2)
+        self.assertNotIn("--now", Path(slack_record.__file__).read_text(encoding="utf-8"))
 
     def test_exactly_one_of_sent_or_state_is_needed(self):
         with tempfile.TemporaryDirectory() as tmp:
             out = str(Path(tmp) / "x.json")
             for argv in (["slack-record", "--out", out],
-                         ["slack-record", "--sent", ts(1), "--state", "off", "--out", out],
+                         ["slack-record", "--sent", real_ts(1), "--expect", "1", "--state", "off", "--out", out],
                          ["slack-record", "--state", "sent", "--out", out],
                          ["slack-record", "--state", "off"]):
                 with self.assertRaises(SystemExit) as stopped, contextlib.redirect_stderr(io.StringIO()):

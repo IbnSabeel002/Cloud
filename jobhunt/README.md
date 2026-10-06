@@ -92,8 +92,12 @@ refuse a `linkedin_alert` entry without it, so one typed by hand is dropped and 
 
 ## The watchdog
 
-A second, separate routine runs at 09:17 Dubai time and checks that the 07:47 hunt really happened. It sends one short
-message to your phone and email. It reads only; it never changes anything.
+A second, separate routine runs at 09:17 Dubai time and checks that the 07:47 hunt really happened. It is set to send one
+short message to your phone and email. It reads only; it never changes anything.
+
+**Delivery is not proven.** On 6 October the routine's push and email were tried by hand and on a schedule, and the phone-push
+tool from inside the routine. Nothing reached the owner's phone or inbox. Until a test message really arrives, treat the
+watchdog's result as something to look at (each run is an unread session at claude.ai/code), not as an alarm that will find you.
 
 - **It checks:** today's run left a record in the tracker that shows the whole playbook was read, has a report link, names
   every required check, shows at least one source worked, and notes when the Slack message went out.
@@ -101,8 +105,9 @@ message to your phone and email. It reads only; it never changes anything.
   `⚠️ Watchdog could not check` when it could not look something up (the hunt itself may be fine).
 - **What it cannot see:** Slack itself (an organisation setting stops a routine from being given the Slack connector). It
   reads the run's own `SlackSent` note, which the run adds to its record after the message goes out and which only the
-  `slack-record` script writes, from the message link Slack returned. A run that sent nothing, or could not confirm it,
-  raises an alert; a run that wrote a false note would pass. It also cannot see whether the daily routine is switched on (a routine's session
+  `slack-record` script writes, from the message timestamp Slack returned (a timestamp older than 30 minutes, or a wrong
+  number of messages, is refused). A run that sent nothing, or could not confirm it, raises an alert; `off` is your own
+  choice and raises none; a run that wrote a false note would pass. It also cannot see whether the daily routine is switched on (a routine's session
   cannot read routines, so a hunt that stopped on purpose looks like one that died: both send the "No record saved" alert);
   whether the jobs are good, or whether data was typed by hand or a source was skipped (the digest warns about those).
   If both routines stop at once (a connector expiry, a paused plan), nothing arrives.

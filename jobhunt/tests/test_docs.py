@@ -309,16 +309,39 @@ class PlaybookTests(unittest.TestCase):
     def test_the_slack_note_is_written_only_by_the_script_and_only_after_the_message_went_out(self):
         notify = PLAYBOOK.split("## 9. Notify")[1].split("## 10. Stop check")[0]
         persist = PLAYBOOK.split("## 8. Persist")[1].split("## 9. Notify")[0]
-        for phrase in ("Record the Slack result", "python3 -m jobhunt slack-record --sent",
-                       "Keep the `message_ts` of every message that went out", "or its `message_link`",
-                       "--state unconfirmed", "--state failed", "--state off", "only the script writes it",
-                       "do not guess", 'ArtifactData(action="update"', 'collection="runs"',
-                       "<the version from section 8 step 4>", "A wrong version is safe", "Never record the note any other way"):
+        for phrase in ("Record the Slack result", "Keep the `message_ts` of every message that went out", "or its `message_link`",
+                       "only the script writes it", "do not guess", 'ArtifactData(action="update"', 'collection="runs"',
+                       "if_version=<the version from section 8 step 4>", "doc_id=<the id from section 8 step 4>",
+                       "A wrong version is safe", "Never record the note any other way",
+                       "each in single quotes", "removes any older file at `--out` first"):
             self.assertIn(phrase, notify, phrase)
         self.assertIn("Keep the `version` the result shows", persist)
         self.assertIn("never type it yourself", PLAYBOOK.split("## 1. Inputs")[0])
         self.assertLess(notify.index("slack_send_message("), notify.index("Record the Slack result"))
         self.assertIn("record `--state failed`", PLAYBOOK.split("## 11. Failure handling")[1])
+
+    def test_the_file_the_script_writes_is_the_file_that_is_merged_and_then_cleaned_up(self):
+        notify = PLAYBOOK.split("## 9. Notify")[1].split("## 10. Stop check")[0]
+        written = re.findall(r"slack-record [^`]*--out (\$RUN/out/run_slack\.json)", notify)
+        self.assertEqual(len(written), 2, "the --sent command and the --state command")
+        merged = re.search(r'file_path="(/tmp/jobhunt-run/out/run_slack\.json)"', notify)
+        self.assertIsNotNone(merged)
+        self.assertEqual(written[0].replace("$RUN", "/tmp/jobhunt-run"), merged.group(1))
+        self.assertIn(merged.group(1), notify.split("6. **Clean up.**")[1])
+
+    def test_each_slack_word_means_one_thing_and_the_count_is_the_one_report_prints(self):
+        notify = PLAYBOOK.split("## 9. Notify")[1].split("## 10. Stop check")[0]
+        self.assertRegex(notify, r"`failed`: Slack is on but not every message went out \(a send failed twice, the profile check "
+                                 r"differed, a Slack tool was missing or refused, a send waited for approval\)")
+        self.assertRegex(notify, r"`unconfirmed`: the messages went out but the script refused the values or a send returned no `message_ts`")
+        self.assertRegex(notify, r"`off`: only when section 3 decided Slack is off \(no Slack id\)")
+        self.assertIn("--expect <the digest_files number that report printed>", notify)
+        self.assertIn('"digest_files"', (ROOT / "jobhunt" / "cli.py").read_text(encoding="utf-8"))
+        self.assertNotRegex(notify, r"`off`[^.]*(failed|differed|refused)")  # off is never the word for a send that did not happen
+
+    def test_a_slack_failure_is_not_written_into_a_report_that_already_exists(self):
+        for phrase in ("say so in the Drive report", "note it in the Drive report"):
+            self.assertNotIn(phrase, PLAYBOOK, phrase)
 
     def test_a_run_with_slack_off_still_records_that_it_is_off(self):
         notify = PLAYBOOK.split("## 9. Notify")[1].split("## 10. Stop check")[0]
@@ -362,7 +385,8 @@ class ReadmeTests(unittest.TestCase):
 
     def test_readme_explains_the_watchdog_and_its_limits(self):
         for phrase in ("## The watchdog", "09:17 Dubai time", "It reads only; it never changes anything",
-                       "`⚠️ Watchdog could not check`", "`SlackSent`", "`slack-record` script",
+                       "`⚠️ Watchdog could not check`", "`SlackSent`", "`slack-record` script", "**Delivery is not proven.**",
+                       "`off` is your own", "older than 30 minutes",
                        "whether the daily routine is switched on", "looks like one that died",
                        "If both routines stop at once", "`WATCHDOG.md`", "watchdog-prompt",
                        "switch this routine off as well"):

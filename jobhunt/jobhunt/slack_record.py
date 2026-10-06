@@ -35,8 +35,11 @@ def message_time(ref: str) -> datetime:
     return datetime.fromtimestamp(int(seconds) + int(micro) / 1_000_000, tz=timezone.utc)
 
 
-def sent_doc(refs: list[str], now: datetime | None = None) -> dict:
-    """The run-record fields for a digest that went out. Every reference must be a recent message."""
+def sent_doc(refs: list[str], now: datetime | None = None, expect: int | None = None) -> dict:
+    """The run-record fields for a digest that went out. Every reference must be a recent message.
+
+    `expect` is how many digest messages the run had to send; when given, exactly that many distinct messages must be named.
+    """
     now = now or datetime.now(timezone.utc)
     if not refs:
         raise ValueError("no Slack message given")
@@ -47,8 +50,11 @@ def sent_doc(refs: list[str], now: datetime | None = None) -> dict:
             raise ValueError(f"that Slack message is not from the last {int(MAX_AGE.total_seconds() // 60)} minutes: "
                              f"{posted.astimezone(DUBAI):%Y-%m-%d %H:%M} Dubai time")
         times[str(ref).strip()] = posted
+    distinct = len(set(times.values()))
+    if expect is not None and distinct != expect:
+        raise ValueError(f"{distinct} different Slack message(s) given, but the run had {expect} digest message(s) to send")
     latest = max(times.values()).astimezone(DUBAI)
-    return {"SlackSent": latest.strftime("%H:%M"), "SlackMessages": len(set(times.values()))}
+    return {"SlackSent": latest.strftime("%H:%M"), "SlackMessages": distinct}
 
 
 def state_doc(state: str) -> dict:

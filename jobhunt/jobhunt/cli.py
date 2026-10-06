@@ -9,7 +9,7 @@
     python -m jobhunt indeed-links --page fetched.json
     python -m jobhunt availability --card card.json [--today YYYY-MM-DD]
     python -m jobhunt parse-pay "AED 4,000 - 5,000"
-    python -m jobhunt slack-record (--sent LINK [LINK ...] | --state off|failed|unconfirmed) --out FILE
+    python -m jobhunt slack-record (--sent TS [TS ...] --expect N | --state off|failed|unconfirmed) --out FILE
     python -m jobhunt watchdog-prompt --tracker-url URL --dispatcher-session ID [--out FILE]
                                      [--test-date YYYY-MM-DD --test-from HHMM --test-to HHMM]
 """
@@ -340,14 +340,21 @@ def cmd_watchdog_prompt(args) -> int:
 
 
 def cmd_slack_record(args) -> int:
+    out = Path(args.out)
+    try:
+        out.unlink(missing_ok=True)  # first, so a refusal can never leave an earlier day's note behind
+    except OSError as exc:
+        raise ValueError(f"cannot clear {args.out}: {exc}") from exc
     if args.sent:
-        now = datetime.fromisoformat(args.now) if args.now else None
-        if now is not None and now.tzinfo is None:
-            raise ValueError("--now needs a time zone, for example 2026-10-07T04:00:00+00:00")
-        doc = slack_record.sent_doc(args.sent, now)
+        if args.expect is None:
+            raise ValueError("--sent needs --expect: the number of digest files that `report` printed")
+        doc = slack_record.sent_doc(args.sent, expect=args.expect)
     else:
         doc = slack_record.state_doc(args.state)
-    Path(args.out).write_text(json.dumps(doc, ensure_ascii=False), encoding="utf-8")
+    try:
+        out.write_text(json.dumps(doc, ensure_ascii=False), encoding="utf-8")
+    except OSError as exc:
+        raise ValueError(f"cannot write {args.out}: {exc}") from exc
     print(json.dumps(doc))
     return 0
 
@@ -426,8 +433,8 @@ def build_parser() -> argparse.ArgumentParser:
     how.add_argument("--sent", nargs="+", metavar="REF",
                      help="one Slack message link or timestamp per digest message that the send tool returned")
     how.add_argument("--state", choices=slack_record.STATES, help="no message to prove: Slack is off, the send failed, or it could not be confirmed")
-    sr.add_argument("--out", required=True, help="the JSON file to write")
-    sr.add_argument("--now", help="tests only: the current time as ISO 8601 with a time zone")
+    sr.add_argument("--expect", type=int, metavar="N", help="with --sent: how many digest messages the run had to send (the digest_files count that `report` printed)")
+    sr.add_argument("--out", required=True, help="the JSON file to write (any file already there is removed first)")
     sr.set_defaults(func=cmd_slack_record)
 
     pay = sub.add_parser("parse-pay", help="debug: show how a pay string is read")
