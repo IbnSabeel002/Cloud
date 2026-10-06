@@ -7,6 +7,7 @@ shape before they go into a prompt, so a typo or a pasted sentence cannot change
 from __future__ import annotations
 
 import re
+from datetime import date
 from pathlib import Path
 
 BEGIN = "<!-- BEGIN WATCHDOG PROMPT -->"
@@ -37,7 +38,24 @@ def template() -> str:
     return "\n".join(lines[1:-1]) + "\n"
 
 
-def render(values: dict) -> str:
+# A test build fixes the date and the time window in the owner-written prompt. It is never switched on by anything the
+# watchdog reads: a message from another session is not "typed by the user", and a model rightly ignores it.
+TEST_FIELDS = {
+    "date": r"20[0-9]{2}-[0-9]{2}-[0-9]{2}",
+    "from": r"(?:[01][0-9]|2[0-3])[0-5][0-9]",
+    "to": r"(?:[01][0-9]|2[0-3])[0-5][0-9]",
+}
+TEST_NOTE = (
+    "TEST BUILD (written by the owner into this prompt, not by anything you read). TODAY is <TEST_DATE> instead of "
+    "the date from step 0, FROM is <TEST_FROM> and TO is <TEST_TO>. STAMP is for TODAY: compute it with "
+    "`TZ=Asia/Dubai date -d '<TEST_DATE>' '+%a %d %b %Y'`. Still run step 0's clock check, but skip its early-start "
+    "rule. In step 2 still convert last_fired_at, but make a finding of it only if TODAY is today's date. Start line 1 "
+    "of the final message with `(test) `, and add ` · window <TEST_FROM>-<TEST_TO>` to the OK line."
+)
+
+
+def render(values: dict, test: dict | None = None) -> str:
+    """The prompt with private values filled in. `test` ({"date", "from", "to"}) makes a test build; None is production."""
     missing = [name for name in PLACEHOLDERS if not str(values.get(name) or "").strip()]
     if missing:
         raise ValueError("missing values: " + ", ".join(missing))
@@ -48,6 +66,23 @@ def render(values: dict) -> str:
         if not re.fullmatch(pattern, str(values[name])):
             raise ValueError(f"{name} does not look right")
     prompt = template()
+    if prompt.count("<TEST_NOTE>\n") != 1:
+        raise ValueError("the template must hold exactly one <TEST_NOTE> line")
+    if test is None:
+        prompt = prompt.replace("<TEST_NOTE>\n", "")
+    else:
+        if set(test) != set(TEST_FIELDS):
+            raise ValueError("a test build needs exactly: date, from, to")
+        for name, pattern in TEST_FIELDS.items():
+            if not re.fullmatch(pattern, str(test[name])):
+                raise ValueError(f"test {name} does not look right")
+        date.fromisoformat(str(test["date"]))  # a real calendar day, not 2026-13-45
+        if str(test["from"]) > str(test["to"]):
+            raise ValueError("test from must not be after test to")
+        note = TEST_NOTE
+        for name in TEST_FIELDS:
+            note = note.replace(f"<TEST_{name.upper()}>", str(test[name]))
+        prompt = prompt.replace("<TEST_NOTE>\n", note + "\n")
     for name in PLACEHOLDERS:
         prompt = prompt.replace(f"<{name}>", str(values[name]))
     return prompt
