@@ -344,7 +344,8 @@ class ReadmeTests(unittest.TestCase):
 
     def test_readme_explains_the_watchdog_and_its_limits(self):
         for phrase in ("## The watchdog", "09:17 Dubai time", "It reads only; it never changes anything",
-                       "`STOPPED`", "`⚠️ Watchdog could not check`", "`Slack not checked`",
+                       "`⚠️ Watchdog could not check`", "`Slack not checked`",
+                       "whether the daily routine is switched on", "looks like one that died",
                        "If both routines stop at once", "`WATCHDOG.md`", "watchdog-prompt",
                        "switch this routine off as well"):
             self.assertIn(phrase, README, phrase)

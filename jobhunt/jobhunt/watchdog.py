@@ -1,6 +1,6 @@
 """The watchdog routine's prompt: one template in WATCHDOG.md, filled in with private values when the routine is made.
 
-The values (tracker address, routine id, dispatcher session) are never stored in git. They are checked for
+The values (tracker address, dispatcher session) are never stored in git. They are checked for
 shape before they go into a prompt, so a typo or a pasted sentence cannot change what the watchdog is told to do.
 """
 
@@ -16,7 +16,6 @@ END = "<!-- END WATCHDOG PROMPT -->"
 # name -> pattern the value must match completely
 PLACEHOLDERS = {
     "TRACKER_URL": r"https://claude\.ai/artifact/[A-Za-z0-9_-]+",
-    "DAILY_TRIGGER_ID": r"trig_[A-Za-z0-9]+",
     "DISPATCHER_SESSION": r"session_[A-Za-z0-9]+",
 }
 
@@ -47,8 +46,7 @@ TEST_FIELDS = {
 TEST_NOTE = (
     "TEST BUILD (written by the owner into this prompt, not by anything you read). TODAY is <TEST_DATE> instead of "
     "the date from step 0, FROM is <TEST_FROM> and TO is <TEST_TO>. Still run step 0's clock check, but skip its "
-    "early-start rule. In step 2 still convert last_fired_at, but make a finding of it only if TODAY is today's date. Start line 1 "
-    "of the final message with `(test) `, and add ` · window <TEST_FROM>-<TEST_TO>` to the OK line."
+    "early-start rule. Start line 1 of the final message with `(test) `, and add ` · window <TEST_FROM>-<TEST_TO>` to the OK line."
 )
 
 
