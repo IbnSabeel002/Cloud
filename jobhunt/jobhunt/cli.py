@@ -9,6 +9,7 @@
     python -m jobhunt indeed-links --page fetched.json
     python -m jobhunt availability --card card.json [--today YYYY-MM-DD]
     python -m jobhunt parse-pay "AED 4,000 - 5,000"
+    python -m jobhunt slack-record (--sent TS [TS ...] --expect N | --state off|failed|unconfirmed) --out FILE
     python -m jobhunt watchdog-prompt --tracker-url URL --dispatcher-session ID [--out FILE]
                                      [--test-date YYYY-MM-DD --test-from HHMM --test-to HHMM]
 """
@@ -23,8 +24,7 @@ from dataclasses import dataclass
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 
-from . import store, tracker
-from . import playbook_gate
+from . import playbook_gate, slack_record, store, tracker
 from .normalize import job_id, job_key
 from .profile import load_profile
 from .report import digest_chunks, render_report_html, render_report_md
@@ -339,6 +339,26 @@ def cmd_watchdog_prompt(args) -> int:
     return 0
 
 
+def cmd_slack_record(args) -> int:
+    out = Path(args.out)
+    try:
+        out.unlink(missing_ok=True)  # first, so a refusal can never leave an earlier day's note behind
+    except OSError as exc:
+        raise ValueError(f"cannot clear {args.out}: {exc}") from exc
+    if args.sent:
+        if args.expect is None:
+            raise ValueError("--sent needs --expect: the number of digest files that `report` printed")
+        doc = slack_record.sent_doc(args.sent, expect=args.expect)
+    else:
+        doc = slack_record.state_doc(args.state)
+    try:
+        out.write_text(json.dumps(doc, ensure_ascii=False), encoding="utf-8")
+    except OSError as exc:
+        raise ValueError(f"cannot write {args.out}: {exc}") from exc
+    print(json.dumps(doc))
+    return 0
+
+
 def cmd_parse_pay(args) -> int:
     pay = parse_pay(args.text)
     print(json.dumps(None if pay is None else {
@@ -407,6 +427,15 @@ def build_parser() -> argparse.ArgumentParser:
     avail.add_argument("--card", required=True, help="the merged candidate card (JSON)")
     avail.add_argument("--today")
     avail.set_defaults(func=cmd_availability)
+
+    sr = sub.add_parser("slack-record", help="write the run record's note about the Slack message (SlackSent, SlackMessages)")
+    how = sr.add_mutually_exclusive_group(required=True)
+    how.add_argument("--sent", nargs="+", metavar="REF",
+                     help="one Slack message link or timestamp per digest message that the send tool returned")
+    how.add_argument("--state", choices=slack_record.STATES, help="no message to prove: Slack is off, the send failed, or it could not be confirmed")
+    sr.add_argument("--expect", type=int, metavar="N", help="with --sent: how many digest messages the run had to send (the digest_files count that `report` printed)")
+    sr.add_argument("--out", required=True, help="the JSON file to write (any file already there is removed first)")
+    sr.set_defaults(func=cmd_slack_record)
 
     pay = sub.add_parser("parse-pay", help="debug: show how a pay string is read")
     pay.add_argument("text")

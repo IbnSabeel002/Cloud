@@ -2,7 +2,7 @@
 
 The daily job hunt runs unattended at 07:47 Dubai time. If it fails, nothing arrives and a silent day looks like a quiet
 day. The watchdog is a small separate routine that runs later in the morning, checks that the hunt left a proper record, and
-sends one short message to your phone and email.
+is set to send one short message to your phone and email. **Delivery is not proven** (see "What it cannot check").
 
 This file is the source of truth for the watchdog's prompt. The prompt lives here, is checked by `tests/`, and is filled
 in with your private values (tracker address, dispatcher session) when the routine is created. Those values are **not** in
@@ -11,13 +11,17 @@ git.
 ## What it checks
 
 Today's run left a record in the tracker database, the record shows the whole playbook was read, it has a report link,
-it names every required check, and at least one source worked.
+it names every required check, at least one source worked, and the run noted when its Slack message went out.
 
 ## What it cannot check
 
-- **Whether the Slack message arrived.** An organisation setting stops a routine from being given the Slack connector,
-  so the watchdog never touches Slack, and its OK line says `Slack not checked`. A later change can close this: have the
-  daily run write "Slack sent" into its record after the message goes out, and have the watchdog look for that.
+- **Whether the Slack message really arrived.** An organisation setting stops a routine from being given the Slack connector,
+  so the watchdog never touches Slack. It reads the run's own note instead, `SlackSent`. The daily run adds that note to
+  its record after the message goes out, and only a script writes it: from the message link that Slack returned, turned
+  into a Dubai-time stamp (or one plain word). The script refuses a timestamp that is not a real Slack message from the last
+  30 minutes, and it checks the number of messages against the number of digest files. `failed` means Slack was on but not
+  every message went out, `unconfirmed` means it looks sent but nothing proves it, and both raise an alert. `off` is the
+  owner's own choice and raises none. A run that wrote a false note would pass.
 - **Whether the daily routine is switched on.** The first live test showed that a routine's fresh session has the database
   tool but no routine tools, so it cannot read the daily routine. A hunt that stopped itself (a job marked `Accepted`) or that
   you switched off looks the same as one that died: no record. The alert says so and tells you to switch the watchdog off
@@ -26,12 +30,17 @@ it names every required check, and at least one source worked.
   those.
 - Anything if the watchdog itself is not running. If both routines stop at once (a connector expiry, a paused plan),
   nothing arrives.
-- What silence means is only known after the first live test shows whether the "OK" line reaches the phone and inbox.
+- **Whether the message reaches you at all. This has not worked yet.** On 2026-10-06 the routine's push and email were tried
+  three times by hand and once on a schedule, and the phone-push tool was called from inside a routine session (it answered
+  "Mobile push requested"). Nothing reached the owner's phone or inbox. Anthropic's routine documentation says nothing about
+  these notifications, and open reports describe the same silent failure. Until a test message really arrives, treat the
+  watchdog as a record to look at (each run is an unread session at claude.ai/code), not as an alarm that will find you. If
+  both routines stop at once, nothing arrives at all, and a quiet morning cannot be told from a healthy one.
 
 ## How it is set up
 
 - A routine that starts a **fresh session each time** (`create_new_session_on_fire`), so it has no memory to drift.
-- Notifications: push and email. These cannot be changed after the routine is created.
+- Notifications: push and email are switched on. These cannot be changed after the routine is created. Delivery is unproven.
 - No connectors. It reads one thing only: the tracker database (one query on the run records). A fresh routine session
   loads that tool with `ToolSearch` by its exact name.
 - Schedule: `CRON_TZ=Asia/Dubai 17 9 * * *`. The hunt may run up to 60 minutes (until 08:47), so 09:17 is after it.
@@ -39,6 +48,9 @@ it names every required check, and at least one source worked.
 - Rollout order: merge the playbook gate first, create the routine **without** a schedule from a **test build** (see
   below) on a day that is known to be healthy, fire it once and check that the tool resolves and the message reaches
   the phone and inbox, then replace the prompt with the production build and add the schedule.
+- **Rolling out the Slack note.** Merge the playbook change first and wait for one daily run whose record has `SlackSent`.
+  Only then update the watchdog prompt with `update_trigger`. An updated watchdog alerts on every record written before the
+  note existed, so updating it earlier gives a false alarm on the first morning. Test builds must use a window after that run.
 - **Test builds.** The production prompt has no test mode, so nothing it reads can switch one on. To test, ask the
   renderer for a build that fixes the date and the time window in the owner-written prompt:
   `python3 -m jobhunt watchdog-prompt ... --test-date 2026-10-06 --test-from 0030 --test-to 0045`. The three values are
@@ -80,12 +92,15 @@ STEPS (in order; do not skip a step because an earlier one looked fine)
  - ReportUrl missing or empty: `The job hunt saved no report link.`
  - Health missing, or no item for one of: settings, indeed, tinyfish (or tiny fish), gmail, tracker: `Some of today's job hunt checks are missing.`
  - Settings has ok false: `The job hunt ran without your settings.`
+ - SlackSent missing, or anything other than a 24-hour time like `07:58` or one of the words off, failed, unconfirmed: `The job hunt did not record whether its Slack message went out.`
+ - SlackSent is failed: `The job hunt could not send its Slack message.`
+ - SlackSent is unconfirmed: `The job hunt could not confirm that its Slack message went out.`
  - Indeed connector, Tiny Fish pages and Gmail alerts all have ok false: `No job source worked today.`
- One source with ok false is NOT a finding: the run reports it. UP is the number of Indeed connector, Tiny Fish pages and Gmail alerts with ok true in the passing record (0 to 3). Use that record's HHMM for the OK line.
- Known limits, do not promise more: this cannot detect hand-typed data or skipped sources, it does not check that the Slack message arrived, and it cannot see whether the daily routine is switched on.
+ One source with ok false is NOT a finding: the run reports it. SlackSent off is NOT a finding: the owner switched Slack off. UP is the number of Indeed connector, Tiny Fish pages and Gmail alerts with ok true in the passing record (0 to 3). SLACK is `sent <time>` when SlackSent is a time, or `off`. Use that record's HHMM for the OK line.
+ Known limits, do not promise more: this cannot detect hand-typed data or skipped sources, it cannot see Slack itself (it reads only the run's own note), and it cannot see whether the daily routine is switched on.
 4. Final message. Plain text, no bold, no code block, nothing before or after it. Replace each <...> with its value and do not print the brackets. Every line is at most 100 characters including the leading `- `. The only variable text allowed is TODAY, HH:MM times, numbers and the fixed sentences in these steps; if a part cannot be filled with an allowed value, drop that part.
  No findings and no notes:
- OK · <TODAY> · run <HH:MM> recorded, <UP> of 3 sources up · Slack not checked
+ OK · <TODAY> · run <HH:MM>, <UP> of 3 sources up, Slack <SLACK> (run's note)
  Only `could not check` notes, nothing else:
  ⚠️ Watchdog could not check · <TODAY>
  - <each note>
