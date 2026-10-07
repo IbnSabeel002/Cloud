@@ -241,7 +241,7 @@ class PlaybookTests(unittest.TestCase):
 
     def test_the_candidate_file_holds_only_the_fetched_entries(self):
         # A live test run put all 58 hits in candidates.json and the digest counted jobs twice.
-        self.assertIn("the entries of `need.json`'s `fetch` list", PLAYBOOK)
+        self.assertIn("**every** entry of `need.json`'s `fetch` list", PLAYBOOK)
         self.assertIn("Do not add the hits listed under `skipped` or `overflow`", PLAYBOOK)
         self.assertNotIn("plus any hits that need no details", PLAYBOOK)
 
@@ -277,11 +277,48 @@ class PlaybookTests(unittest.TestCase):
         # The first dispatcher canary skipped Gmail and the Tiny Fish pages "to keep the run short" and finished in 2 minutes.
         rule = PLAYBOOK.split("**Run every source in 4.1, 4.2 and 4.3.")[1].split("\n\n")[0]
         self.assertIn("Never skip one to save time, effort or tokens", PLAYBOOK)
-        for reason in ("(1) the tool returned an error", "(2) the tool does not exist in this session",
-                       "(3) the 40-minute limit"):
+        for reason in ("(1) `tool_error`: the tool returned an error", "(2) `tool_missing`: the tool does not exist in this session",
+                       "(3) `time_limit`: the 40-minute limit", "(4) `refused`: a call was refused"):
             self.assertIn(reason, rule)
         self.assertIn("are not reasons", rule)
         self.assertIn('"Skipped to keep the run short"', rule)
+
+    def test_the_reason_words_in_the_playbook_are_the_ones_the_code_accepts(self):
+        from jobhunt import coverage
+        rule = PLAYBOOK.split("**Run every source in 4.1, 4.2 and 4.3.")[1].split("\n\n")[0]
+        self.assertEqual(set(re.findall(r"`(tool_error|tool_missing|time_limit|refused)`", rule)), set(coverage.REASONS))
+        self.assertIn("python3 -m jobhunt elapsed", rule)
+        self.assertIn(f"{coverage.TIME_LIMIT_MINUTES}-minute limit", rule)
+
+    def test_the_source_table_and_the_labels_match_the_code(self):
+        from jobhunt import coverage
+        table = PLAYBOOK.split("| Row name | Written in | What it stands for |")[1].split("\n\n")[0]
+        listed = re.findall(r"^\| `([^`]+)` \|", table, re.M)
+        self.assertEqual(sorted(listed), sorted(coverage.REQUIRED))  # the table follows the order of the run, not the code's
+        self.assertEqual(len(listed), len(set(listed)))
+        row = next(l for l in PLAYBOOK.splitlines() if l.startswith("| `source` |"))
+        for label in coverage.KNOWN_SOURCES:
+            self.assertIn(f"`{label}`", row, label)
+
+    def test_the_prefilter_command_and_its_refusal_are_written_down(self):
+        self.assertIn("prefilter --candidates $RUN/raw.json --health $RUN/health.json", PLAYBOOK)
+        self.assertIn("The prefilter refuses to run (exit 2, with a list)", PLAYBOOK)
+        self.assertIn("`hits_seen`", PLAYBOOK)
+        self.assertIn("at least 80%", PLAYBOOK)
+        self.assertIn("Write down every result row, repeats included", PLAYBOOK)
+        self.assertIn("a job that came back twice is two entries", PLAYBOOK)
+
+    def test_every_hit_and_every_picked_job_has_to_come_back(self):
+        self.assertIn("**every** entry of `need.json`'s `fetch` list", PLAYBOOK)
+        self.assertIn("Coverage unknown", PLAYBOOK)
+        self.assertIn("leave them in, word for word", PLAYBOOK)
+
+    def test_other_alerts_are_reported_with_threads_and_jobs(self):
+        self.assertIn("`N threads, M jobs`", PLAYBOOK)
+        self.assertIn('"0 threads, 0 jobs"', PLAYBOOK)
+
+    def test_section_four_is_reprinted_before_it_is_followed(self):
+        self.assertIn("Before sections 4, 5, 8 and 9, print that section again", PLAYBOOK)
 
     def test_alerts_are_only_read_by_the_script(self):
         # Canary 2 asked Gmail for the plain-text format, got small inline results and typed the jobs in by hand.

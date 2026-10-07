@@ -83,6 +83,8 @@ def pipeline(profile: dict, candidates: list, existing_rows: list, today: date) 
         "below_threshold": stats["below_threshold"],
         "rejected_jobs": stats["rejected_jobs"],
         "reject_reasons": dict(stats["reject_reasons"]),
+        # Named so a wrong `expired` flag cannot hide a real job: the owner sees which posts were dropped and can look.
+        "expired_examples": [f"{e.title} — {e.company}" for e in evaluations if "expired" in e.reject_reasons][:3],
         "auto_dead": stats["auto_dead"],
         "pruned": stats["pruned"],
         "tracker_rows": len(rows),

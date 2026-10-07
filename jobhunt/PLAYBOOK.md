@@ -7,7 +7,7 @@ exactly which database writes are needed. Never redo that arithmetic by hand.
 
 Tools below are named by their short names. If one is deferred, load it with ToolSearch first.
 
-**Read this file through the gate.** Print it with `python3 -m jobhunt playbook --chunk 1`, then `--chunk 2` and on to the last chunk (each ends with `next: --chunk N+1`; the last ends with `=== END OF PLAYBOOK ===`). `prefilter`, `run` and `report` refuse to work until every chunk of this version has been read, and the digest shows which version ran. Before sections 5, 8 and 9, print that section again with `python3 -m jobhunt playbook --section N` and follow the printed text. Obey section 0 at all times, execute sections 2 to 11 in order, and stay inside section 12. Never set `JOBHUNT_SKIP_PLAYBOOK_GATE`.
+**Read this file through the gate.** Print it with `python3 -m jobhunt playbook --chunk 1`, then `--chunk 2` and on to the last chunk (each ends with `next: --chunk N+1`; the last ends with `=== END OF PLAYBOOK ===`). `prefilter`, `run` and `report` refuse to work until every chunk of this version has been read, and the digest shows which version ran. Before sections 4, 5, 8 and 9, print that section again with `python3 -m jobhunt playbook --section N` and follow the printed text. Obey section 0 at all times, execute sections 2 to 11 in order, and stay inside section 12. Never set `JOBHUNT_SKIP_PLAYBOOK_GATE`.
 
 **Every Bash call starts in a fresh shell.** The working directory is reset and `RUN` is not set. Wherever this file says `$RUN`, the path is `/tmp/jobhunt-run`. Start every Bash command that uses it or the `jobhunt` package with `export RUN=/tmp/jobhunt-run; cd $RUN/src/jobhunt &&`, and use `/tmp/jobhunt-run/...` in every tool parameter (`out_dir`, `file_path`). Read this file only from the fresh clone at `/tmp/jobhunt-run/src`; any other copy of the repository on the machine may be stale.
 
@@ -88,18 +88,34 @@ ArtifactData(action="list", url=TRACKER_URL, collection="jobs", query={"limit": 
 
 ## 4. Source
 
-Record each source in `$RUN/health.json` as `{"source": "...", "ok": true|false, "detail": "..."}`. A source that errors is `ok: false` with the reason. Keep going.
+Record each source in `$RUN/health.json` as one row: `{"source": "...", "ok": true|false, "detail": "...", "reason": "...", "hits_seen": N}`. `reason` is only for `ok: false`; `hits_seen` is only for the Indeed row. A source that errors is `ok: false` with the reason. Keep going.
 
-**Use exactly these names.** The digest warns `<name> never reported` for any of them that is missing, and marks the run degraded: `Settings` (section 3), `Indeed connector` (4.1), `Tiny Fish pages` (4.2), `Gmail alerts` (4.3) and `Tracker write` (section 8). Firecrawl (4.4) is optional and is not on the list.
+**Use exactly these names, one row each.** The digest and the checks match them by name, warn `<name> never reported` for any that is missing, and mark the run degraded. Eight rows must exist before step 5 of section 5; `Tracker write` is written in section 8.
 
-**Run every source in 4.1, 4.2 and 4.3. Never skip one to save time, effort or tokens.** A source may be recorded as not run for exactly three reasons, and the `detail` must say which: (1) the tool returned an error (quote its first line, with no links); (2) the tool does not exist in this session even after ToolSearch (say so); (3) the 40-minute limit in the prompt has passed (give the minutes). "Skipped to keep the run short" and "not needed today" are not reasons. A run that finishes in a few minutes has probably skipped something it should have done.
+| Row name | Written in | What it stands for |
+|---|---|---|
+| `Settings` | section 3 | your saved settings |
+| `Indeed connector` | 4.1 | the Indeed `search_jobs` and `get_job_details` calls |
+| `Tiny Fish pages` | 4.2 | the Indeed UAE last-3-days pages and any watchlist pages |
+| `Bayt pages` | 4.2 | the Bayt listing pages |
+| `GulfTalent` | 4.2 | GulfTalent snippets from Tiny Fish `search` |
+| `Naukrigulf` | 4.2 | Naukrigulf snippets from Tiny Fish `search` |
+| `Gmail alerts` | 4.3 steps 1 to 3 | LinkedIn alert emails |
+| `Other alerts` | 4.3 step 4 | Indeed, Bayt and GulfTalent alert emails |
+| `Tracker write` | section 8 | saving today's jobs |
+
+Firecrawl (4.4) is optional and is not on the list. `prefilter` refuses to run, and prints what to fix, until the first eight rows exist and every failed row is explained (section 5, step 2).
+
+**An `ok: true` row means the work was done.** A search or page that returned nothing is still `ok: true` (write `detail: "0 results"`). Never write `ok: true` for a step you did not do.
+
+**Run every source in 4.1, 4.2 and 4.3. Never skip one to save time, effort or tokens.** A source may be recorded as not run (`ok: false`) for exactly four reasons, and the row must carry the matching `reason` word and a `detail` with the evidence: (1) `tool_error`: the tool returned an error (quote its first line, with no links); (2) `tool_missing`: the tool does not exist in this session even after ToolSearch (say so); (3) `time_limit`: the 40-minute limit in the prompt has passed (run `python3 -m jobhunt elapsed` first and give its minutes; the script refuses this reason unless that command has printed 40 or more); (4) `refused`: a call was refused or waited for approval (name the call). "Skipped to keep the run short" and "not needed today" are not reasons, and the script refuses a note that reads like them. A run that finishes in a few minutes has probably skipped something it should have done.
 
 ### 4.1 Indeed connector (`search_jobs`, then `get_job_details`)
 
 Call `search_jobs(search=<query>, location="Dubai", country_code="AE")` for each query. Default queries (max 10):
 `Creative AI Specialist`, `AI Content Specialist`, `Generative AI Specialist`, `AI Video Producer`, `Social Media Manager AI`, `AI Marketing Specialist`, `Marketing Operations`, `Marketing Automation`, `Digital Transformation`, `Creative Technologist`.
 
-Each hit gives title, company, location, "Posted on", job id and URL. The connector shows **no pay and no date filter**, and the same job often comes back several times under different ids (7 times for one listing in a live test), so expect 30% duplicates. Pay comes from `get_job_details` later.
+Each call returns **at most 10 hits** and there is no way to ask for more, so 10 queries give at most 100. Each hit gives title, company, location, "Posted on", job id and URL. The connector shows **no pay and no date filter**, and the same job often comes back several times under different ids (7 times for one listing in a live test), so expect 30% duplicates. Pay comes from `get_job_details` later.
 
 **Rate limit.** The connector limits calls per account across all sessions (`Rate limit exceeded for account … Try again in N seconds`), and the wait grows with every retry (16 s, then 39 s, then 52 s in a live test; one run lost about 7 minutes retrying). So:
 - Make **at most 3 Indeed calls at a time**, not a burst of 10.
@@ -108,20 +124,24 @@ Each hit gives title, company, location, "Posted on", job id and URL. The connec
 
 **Connection errors.** `ProtocolError`, `failed to connect`, `not connected` or a timeout: run ToolSearch again for that tool's name and retry that call once. If it fails again, record `Indeed connector` as `ok: false` with a short error text and open the remaining jobs with Tiny Fish `fetch_content` on their links, as for a rate limit (a live run's connector failed to connect for a whole run).
 
+**Count what came back.** After the last search, put `hits_seen` on the `Indeed connector` row: the total number of result rows all your `search_jobs` calls returned, repeats included (a plain whole number, for example `"hits_seen": 94`). Section 5 then requires every one of those rows to be written down. If every search returned nothing, the connector is broken for today: record the row as `ok: false`, `reason` `tool_error`, `detail` "all searches returned 0 results".
+
 Two quirks seen in live runs:
 - `get_job_details` returns `Compensation: None` and often `Company: None`, **even when the post has a pay line**. Read the pay from a `Pay: AED…` line at the bottom of the description, and keep the company from the search hit.
 - `Pay: From AED1,111.00 per month` is a board placeholder far more often than a real offer. Record it as written; the script flags it (`pay_min_below_floor`) and does not trust it.
 
-### 4.2 Tiny Fish pages (`fetch_content`; free)
+### 4.2 Tiny Fish pages, Bayt, GulfTalent and Naukrigulf (`fetch_content` and `search`; free)
+
+This section feeds four rows: `Tiny Fish pages` (the Indeed UAE pages and the watchlist), `Bayt pages`, `GulfTalent` and `Naukrigulf`. Write each row when its part is done, even when it found nothing.
 
 Fetch these as markdown, up to 12 URLs per run in total (they run in parallel, 10 per call):
-- **Indeed UAE, last 3 days (best source of fresh roles):** `https://ae.indeed.com/jobs?q=<query>&l=Dubai&fromage=3&sort=date` for 3 queries from 4.1. It lists title and company for each result and **expands only the first job** (full description and pay). It surfaced roles the Indeed connector did not return. Attribute the expanded pay to the first listing only. Fetch these pages with `links: true`. Large results are saved to a file and the tool prints its path: run `python3 -m jobhunt indeed-links --page <path>` (do not open the file). It prints each job card's own link in page order, so the k-th card gets the k-th link. If the number of links differs from the number of cards you can read, do not guess: leave that `url` empty. **Never use the results page's own address as a job's `url`** (the script clears it and flags `no_job_link`). Only the card the page expanded (its `#####` heading names it) has a full description. For every other card use the few bullets shown as `description` and set `description_partial: true`. The expanded text can name a different employer than the listing (a live case showed "Berrychino" on the list and "Crystal Arc Factory" in the text): add `extra_flags: ["employer_mismatch"]`.
-- **Bayt (low yield):** `https://www.bayt.com/en/uae/jobs/<slug>-jobs-in-dubai/`. In a live test only 4 to 10 of about 30 entries carried a title and company, and slugs like `ai-specialist` returned loosely related jobs (legal analyst, financial reporting). Use only entries that show both a title and a company. Ignore the rest. Bayt does show "N days ago" and sometimes a pay band.
-- Watchlist career pages from `WATCHLIST_URLS` (at most 3 per run, rotate by day of year).
+- **Indeed UAE, last 3 days (best source of fresh roles; row `Tiny Fish pages`, entries get `source` `indeed_page`):** `https://ae.indeed.com/jobs?q=<query>&l=Dubai&fromage=3&sort=date` for 3 queries from 4.1. It lists title and company for each result and **expands only the first job** (full description and pay). It surfaced roles the Indeed connector did not return. Attribute the expanded pay to the first listing only. Fetch these pages with `links: true`. Large results are saved to a file and the tool prints its path: run `python3 -m jobhunt indeed-links --page <path>` (do not open the file). It prints each job card's own link in page order, so the k-th card gets the k-th link. If the number of links differs from the number of cards you can read, do not guess: leave that `url` empty. **Never use the results page's own address as a job's `url`** (the script clears it and flags `no_job_link`). Only the card the page expanded (its `#####` heading names it) has a full description. For every other card use the few bullets shown as `description` and set `description_partial: true`. The expanded text can name a different employer than the listing (a live case showed "Berrychino" on the list and "Crystal Arc Factory" in the text): add `extra_flags: ["employer_mismatch"]`.
+- **Bayt (low yield; row `Bayt pages`, entries get `source` `bayt`):** `https://www.bayt.com/en/uae/jobs/<slug>-jobs-in-dubai/`. In a live test only 4 to 10 of about 30 entries carried a title and company, and slugs like `ai-specialist` returned loosely related jobs (legal analyst, financial reporting). Use only entries that show both a title and a company. Ignore the rest. Bayt does show "N days ago" and sometimes a pay band.
+- Watchlist career pages from `WATCHLIST_URLS` (at most 3 per run, rotate by day of year; row `Tiny Fish pages`, entries get `source` `careers`).
 
 Pages are large (a Bayt page was 15 KB, five pages 59 KB). When the tool says the output was saved to a file, read it with a short Python script (regex out titles, companies, dates, pay) instead of reading the raw text.
 
-GulfTalent returns partial tables and Naukrigulf returns nothing. For those two, use Tiny Fish `search` with `include_domains` set to the site, and treat results as snippets only.
+GulfTalent returns partial tables and Naukrigulf returns nothing. For those two, use Tiny Fish `search` with `include_domains` set to the site, and treat results as snippets only. Each is its own row: `GulfTalent` (entries get `source` `gulftalent`) and `Naukrigulf` (entries get `source` `naukrigulf`). Naukrigulf often yields nothing; that is `ok: true` with `detail: "0 results"`, not a reason to skip the search.
 
 Use `run_web_automation` **only** when `fetch_content` returns empty on a public page you really need, at most 3 times a run, and only after `get_wallet` shows a balance. No logins. No forms.
 
@@ -136,8 +156,8 @@ Read only job-alert mail. Never open any other message, and never print a messag
    python3 -m jobhunt parse-alert --thread <path1> <path2> ... --out $RUN/alerts.json
    ```
    **Never type alert jobs into `raw.json` yourself.** The script marks each job it makes, and `prefilter` and `run` refuse a `linkedin_alert` entry without that mark: it is dropped, counted as `unparsed_alert_entries`, and the digest warns that alert entries typed by hand were dropped. It reads only each email's plain-text part, merges the repeats (the same job appears two or three times per email and again across emails), strips the tracking from the links, and prints how many alerts and jobs it found and what it skipped. Add everything in `alerts.json` to `$RUN/raw.json` (section 5).
-4. **Other boards' alerts** (Indeed, Bayt, GulfTalent; `from:indeed.com OR from:bayt.com OR from:gulftalent.com`): there is no script yet. Check each thread's `sender` first: the address must end with `@indeed.com`, `@bayt.com` or `@gulftalent.com`, or have one of those as its domain after a subdomain dot. Skip every other thread and count it as skipped. Take `apply_email` only from the job post itself, never from an alert's body. Read only the `plaintextBody` of each with a short Python snippet, never the HTML, extract title, company, location and link by hand, and set `source` to `indeed_alert`, `bayt_alert` or `other`.
-5. Never open a tracking link, and never open a `linkedin.com` link at all (rule 5). If there are no alert emails, record `ok: true, detail: "no alerts found (set up job alerts)"`. If Gmail answers with a sign-in or authorization error, record `ok: false, detail: "Gmail needs re-authorization"` and carry on. Do not retry. Record the counts the script printed in the health `detail` (for example `3 alerts, 9 jobs`).
+4. **Other boards' alerts** (Indeed, Bayt, GulfTalent; `from:indeed.com OR from:bayt.com OR from:gulftalent.com`; row `Other alerts`): there is no script yet. Check each thread's `sender` first: the address must end with `@indeed.com`, `@bayt.com` or `@gulftalent.com`, or have one of those as its domain after a subdomain dot. Skip every other thread and count it as skipped. Take `apply_email` only from the job post itself, never from an alert's body. Read only the `plaintextBody` of each with a short Python snippet, never the HTML, extract title, company, location and link by hand, and set `source` to `indeed_alert`, `bayt_alert` or `other`. Write the `Other alerts` row with the counts in `detail`, as `N threads, M jobs` (threads you found, jobs you took from them). No such mail is `ok: true, detail: "0 threads, 0 jobs"`. The digest warns when mails were found but no job was taken from them.
+5. Never open a tracking link, and never open a `linkedin.com` link at all (rule 5). If there are no alert emails, record `ok: true, detail: "no alerts found (set up job alerts)"`. If Gmail answers with a sign-in or authorization error, record `ok: false, detail: "Gmail needs re-authorization"` and carry on. Do not retry. Record the counts the script printed in the `Gmail alerts` row's `detail` (for example `3 alerts, 9 jobs`).
 
 An alert gives **only title, company and place**: no pay, no description, no posting date. The script judges such a listing at a lower bar (`thin_shortlist_threshold`, 50) and the digest says "no job description captured". They are leads for the user to open, not verified matches.
 
@@ -147,19 +167,20 @@ If Firecrawl tools exist, use `firecrawl_search` (domain-filtered to bayt.com, g
 
 ## 5. Turn hits into structured candidates
 
-1. Write every hit to `$RUN/raw.json` as a JSON list using the schema below. **Unknown means `null` or `[]`. Never guess.**
+1. Write every hit to `$RUN/raw.json` as a JSON list using the schema below. **Unknown means `null` or `[]`. Never guess.** **Write down every result row, repeats included**: a job that came back twice is two entries, because `prefilter` removes the repeats and decides what is worth opening, not you. Add each search's hits to the file right after you get them (a short Python snippet), so none are held only in your head. On 2026-10-07 a run got 94 results, wrote down 27, and the digest said "38 hits found".
 2. Run:
    ```bash
-   python3 -m jobhunt prefilter --candidates $RUN/raw.json --db-dir $RUN/db --profile $RUN/profile.json --out $RUN/need.json --limit 25
+   python3 -m jobhunt prefilter --candidates $RUN/raw.json --health $RUN/health.json --db-dir $RUN/db --profile $RUN/profile.json --out $RUN/need.json --limit 25
    ```
-   `need.json` holds `fetch` (worth opening), `overflow`, and `skipped` (why the rest were dropped). In a live test it cut 68 hits to 13.
+   `need.json` holds `fetch` (worth opening), `overflow`, `skipped` (why the rest were dropped) and `raw_by_source` (the script's own count of your entries by `source`). In a live test it cut 68 hits to 13.
+   **The prefilter refuses to run (exit 2, with a list) until:** the eight source rows exist; every `ok: false` row has an allowed `reason` and a `detail` that is evidence (section 4); the `Indeed connector` row has `hits_seen` and at least 80% of those results (when there are 10 or more) are in `raw.json` as `indeed` entries; and every entry's `source` is in the table below. Fix what it lists and run it again. Do not weaken a row to get past it: a false row is worse than a failed one.
 3. For each entry in `fetch` call `get_job_details` (Indeed) or `fetch_content` (other URLs). **Entries with `source` `linkedin_alert` are never opened** (rule 5): keep them exactly as `alerts.json` gave them, and only add what you can see without opening LinkedIn. For at most 5 of them per run (the best title matches, counted in the Indeed budget), you may look for the same job on Indeed with `search_jobs(search="<title> <company>")`. If a hit has the same company and the same role, take its `description`, `pay_text` and `pay_source` from `get_job_details` and keep the LinkedIn link as the `url`. If nothing matches, leave the entry thin. Fill in `description`, `pay_text`, `pay_source`, `level_label`, `years_required`, `languages_required`, `job_type`, `apply_method`, `apply_email`, `scope_items`, `visa_info`, `gender_restricted`, `extra_flags`.
    **Cards from a results page** (those with `description_partial`) are opened through their own `viewjob?jk=` link: try `fetch_content` first. Indeed answers it with error 401 (measured), so then use Firecrawl `firecrawl_scrape` on the same link (`formats: ["markdown"]`, `onlyMainContent: true`, `maxAge: 0`), at most 12 per run (the Firecrawl budget in section 12). The page shows the pay on the line under the company name (for example `AED3,500 - AED4,000 a month`) and again as `Pay:` at the bottom. Take the text under `Full job description` as the `description`, take the pay line as `pay_text` with `pay_source` `listing`, and drop `description_partial`. A job found this way was listed by the snippet as "pay not listed" while its page said AED 3,500 to 4,000, so always open it. If both tools fail, keep the card as it is.
-4. Save the completed `fetch` entries as `$RUN/candidates.json`: the entries of `need.json`'s `fetch` list, with the fields above filled in, and nothing else. **Do not add the hits listed under `skipped` or `overflow`.** The prefilter has already decided them and `run` counts them from `need.json`. (If you add them anyway, `run` still counts each job once, but the file is bigger and slower to read.)
+4. Save the completed `fetch` entries as `$RUN/candidates.json`: **every** entry of `need.json`'s `fetch` list (the digest counts the ones that did not come back), with the fields above filled in, and nothing else. **Do not add the hits listed under `skipped` or `overflow`.** The prefilter has already decided them and `run` counts them from `need.json`. (If you add them anyway, `run` still counts each job once, but the file is bigger and slower to read.)
 
 | Field | Value |
 |---|---|
-| `source` | `indeed`, `bayt`, `gulftalent`, `careers`, `linkedin_alert`, `indeed_alert`, `bayt_alert`, `other`. `linkedin_alert` entries come only from `alerts.json` |
+| `source` | `indeed` (connector hits only), `indeed_page` (cards from the Indeed UAE pages), `bayt`, `gulftalent`, `naukrigulf`, `careers` (watchlist pages), `linkedin_alert`, `indeed_alert`, `bayt_alert`, `other`. Any other value is refused. `linkedin_alert` entries come only from `alerts.json` |
 | `title`, `company`, `location` | exactly as shown on the page. Never reword, shorten or add a comment to a title (a canary run wrote "...(generative AI video, not a traditional social media manager role)" into one). Put comments in `why`. A card that shows no readable title is left out, not guessed |
 | `url` | the job's own link: a `viewjob?jk=` link from `indeed-links`, a `to.indeed.com` link from the connector, a Bayt job page. Never a results or search page |
 | `posted` | the date text exactly as shown ("Posted on: October 02, 2026", "16 days ago", "21 Sep") |
@@ -184,7 +205,7 @@ If Firecrawl tools exist, use `firecrawl_search` (domain-filtered to bayt.com, g
 python3 -m jobhunt run --candidates $RUN/candidates.json --db-dir $RUN/db --prefilter $RUN/need.json --profile $RUN/profile.json --out $RUN/out
 ```
 
-Read `$RUN/out/summary.json`. The script has decided who is shortlisted, who is strong, what was screened out and why. It wrote `shortlist.json`, `summary.json`, and **`writes.json`: the exact database writes needed**. `--prefilter` folds the jobs dropped in step 5 into the counts, so the digest shows the whole funnel. If `summary.invalid` is non-empty, fix those records once and re-run.
+Read `$RUN/out/summary.json`. The script has decided who is shortlisted, who is strong, what was screened out and why. It wrote `shortlist.json`, `summary.json`, and **`writes.json`: the exact database writes needed**. `--prefilter` folds the jobs dropped in step 5 into the counts, so the digest shows the whole funnel, and lets the script count how many jobs it picked to open that came back finished. Never leave it out: without it the digest says `Coverage unknown`. If `summary.invalid` is non-empty, fix those records once and re-run.
 
 ## 7. Deep dive (the part only you can do)
 
@@ -238,7 +259,7 @@ Writing rules: simple English. Short sentences. No flattery. No buzzwords. One r
    ```bash
    python3 -m jobhunt report --out $RUN/out --analysis $RUN/analysis.json --health $RUN/health.json --report-url <report URL> --tracker-url $TRACKER_URL --drafts <number of Gmail drafts you really created>
    ```
-   The digest claims only what happened: pass the real number of drafts (0 when Gmail failed or no post had an apply email). This writes `digest_1.txt` (and `digest_2.txt`… if long). If section 8 could not create the Doc, omit `--report-url`.
+   The digest claims only what happened. Warnings the script printed under the health line (lines starting with ⚠️) are its findings: leave them in, word for word, in the digest and in your final message. Pass the real number of drafts (0 when Gmail failed or no post had an apply email). This writes `digest_1.txt` (and `digest_2.txt`… if long). If section 8 could not create the Doc, omit `--report-url`.
 2. **Slack off (no Slack id, see section 3):** skip steps 3 and 4 and go to step 5 with `--state off`. Your final message is the full text of `digest_1.txt` (and `digest_2.txt`… if any), unchanged. Nothing else.
 3. **Slack on:** confirm the id as rule 3 says (`slack_read_user_profile` with no `user_id`, then with the id: the same person).
 4. `slack_send_message(channel_id=<the Slack id>, message=<digest_N.txt>)` for each digest file, in order. The digest is standard markdown and fits Slack's limit. Each send returns JSON such as `{"message_link": "…", "message_context": {"message_ts": "1791258615.952059", …}}`. Keep the `message_ts` of every message that went out. If a send fails, retry that one once. If it still fails, step 5 records it. Either way the digest is also your final message (rule 8).
@@ -263,7 +284,8 @@ You never decide a job is "good enough". Only the user does, by setting a job to
 |---|---|
 | Code self-check | final message `Job hunt did not run: the code self-check failed.` and stop (section 2) |
 | `ArtifactData` unavailable | stateless run (section 3) and say so in the digest |
-| One source | `ok: false` in health, continue; the digest shows a degraded-run warning |
+| One source | `ok: false` in health with its `reason` and `detail` (section 4), continue; the digest shows a degraded-run warning |
+| `prefilter` refuses (exit 2) | read the list, fix `health.json` or `raw.json` as it says, run it again; never delete a warning or soften a row to pass |
 | Indeed rate limit | wait once, retry once, then open the remaining jobs with Tiny Fish `fetch_content` (section 4.1) |
 | Every source | final message `No data today: all sources failed`, write nothing, stop |
 | Tracker write or verify | retry once, then record the failure and continue (section 8) |
@@ -273,4 +295,4 @@ You never decide a job is "good enough". Only the user does, by setting a job to
 
 ## 12. Budget per run
 
-Indeed: at most 10 searches and 25 job-detail calls. Tiny Fish fetch: at most 12 URLs. Tiny Fish `run_web_automation`: at most 3. Firecrawl: at most 12 calls. Deep dives: only `"outreach": true` entries (at most 5). These are ceilings, not targets: do not exceed them, and do not stay far under them to finish early. Overflow is reported, not fetched.
+Indeed: at most 10 searches and 25 job-detail calls. Tiny Fish fetch: at most 12 URLs. Tiny Fish `run_web_automation`: at most 3. Firecrawl: at most 12 calls. Deep dives: only `"outreach": true` entries (at most 5). These are ceilings, not targets: do not exceed them, and do not stay far under them to finish early. Overflow is reported, not fetched. A run has about 40 minutes (the prompt says so): `python3 -m jobhunt elapsed` prints how many have passed, and it is the only clock the digest accepts for the `time_limit` reason.

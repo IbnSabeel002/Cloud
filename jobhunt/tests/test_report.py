@@ -543,3 +543,31 @@ class CoverageInTheDigestTests(unittest.TestCase):
         digest = self.texts(HEALTHY, {"picked": 5, "finished": 1})[0]
         self.assertIn("Degraded run — today's list may be incomplete. See the warnings below.", digest)
         self.assertNotIn("some sources failed", digest)
+
+
+class ExpiredNamesTests(unittest.TestCase):
+    def setUp(self):
+        self.r = run()
+
+    def test_the_dropped_expired_posts_are_named_in_all_three_outputs(self):
+        summary = dict(self.r.summary, expired_examples=["Creative Lead — Acme", "Social Manager — Beta"],
+                       reject_reasons={"expired": 2, "stale": 1})
+        text = "\n".join(digest_chunks(summary, self.r.shortlist, HEALTHY, None, None, TODAY))
+        self.assertIn("Dropped as expired: Creative Lead — Acme; Social Manager — Beta", text)
+        self.assertIn("Dropped as expired: Creative Lead — Acme", render_report_md(summary, self.r.shortlist, HEALTHY, None, TODAY))
+        self.assertIn("Dropped as expired: Creative Lead — Acme", render_report_html(summary, self.r.shortlist, HEALTHY, None, TODAY))
+
+    def test_nothing_is_said_when_nothing_expired_and_the_names_cannot_inject_markup(self):
+        self.assertNotIn("Dropped as expired", "\n".join(digest_chunks(self.r.summary, self.r.shortlist, HEALTHY, None, None, TODAY)))
+        summary = dict(self.r.summary, expired_examples=["Role](https://evil.example/login) [Reply — Co"])
+        text = "\n".join(digest_chunks(summary, self.r.shortlist, HEALTHY, None, None, TODAY))
+        self.assertNotIn("evil.example", text)
+
+    def test_the_pipeline_names_up_to_three_expired_posts(self):
+        from jobhunt.cli import pipeline as pipe
+        data = json.loads(FIXTURE.read_text(encoding="utf-8"))["candidates"]
+        for n, c in enumerate(data[:5]):
+            c["extra_flags"] = ["expired_on_indeed"]
+        summary = pipe(load_profile(), data, [], TODAY).summary
+        self.assertEqual(len(summary["expired_examples"]), 3)
+        self.assertTrue(all(" — " in x for x in summary["expired_examples"]))

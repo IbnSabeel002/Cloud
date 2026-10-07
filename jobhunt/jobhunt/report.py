@@ -201,6 +201,12 @@ def _health_view(health: list[dict] | None, summary: dict | None = None, limit_s
     return HealthView(line, notes, degraded)
 
 
+def _expired_line(summary: dict) -> str:
+    """Names (up to three) the posts the script dropped as expired, so a wrong `expired` flag is easy to spot."""
+    names = [_plain(x, 90) for x in (summary.get("expired_examples") or []) if _plain(x, 90)][:3]
+    return ("Dropped as expired: " + "; ".join(names)) if names else ""
+
+
 def _chunk(text: str, limit: int) -> list[str]:
     chunks, current = [], ""
     for line in text.split("\n"):
@@ -244,6 +250,9 @@ def digest_chunks(
     if reasons:
         top = sorted(reasons.items(), key=lambda kv: (-kv[1], kv[0]))[:5]
         out.append("Screened out because: " + " · ".join(f"{n} {_plain(reason_label(r), 60)}" for r, n in top))
+    expired = _expired_line(summary)
+    if expired:
+        out.append(expired)
     out.append("")
 
     picks = shortlist[:max_top]
@@ -316,6 +325,8 @@ def render_report_html(
             f"<li>{n} × {_esc(reason_label(r))}</li>" for r, n in sorted(reasons.items(), key=lambda kv: (-kv[1], kv[0]))
         )
         parts.append(f"<h2>Screened out</h2><ul>{items}</ul>")
+        if _expired_line(summary):
+            parts.append(f"<p>{_esc(_expired_line(summary))}</p>")
     parts.append("<h2>New shortlist</h2>")
     if not shortlist:
         parts.append("<p>No new matches cleared the bar today.</p>")
@@ -366,6 +377,8 @@ def render_report_md(
     )
     for r, n in sorted(summary.get("reject_reasons", {}).items(), key=lambda kv: (-kv[1], kv[0])):
         lines.append(f"- {n} × {reason_label(r)}")
+    if _expired_line(summary):
+        lines.append(_expired_line(summary))
     for e in shortlist:
         note = analysis.get(e["job_id"], {})
         lines += ["", f"## {e['title']} — {e['company']}",

@@ -24,14 +24,30 @@ _COMMISSION_ONLY = re.compile(
     re.I,
 )
 # A post the board itself says is closed. Indeed shows these pages ("This job has expired on Indeed") and still lists
-# them in search results, so a scored-and-shortlisted dead post wastes the owner's morning.
-_EXPIRED_TEXT = re.compile(
-    r"\b(?:this|the)\s+(?:job|position|posting|vacancy|role|listing)\s+"
+# them in search results, so a scored-and-shortlisted dead post wastes the owner's morning. In a description only a
+# sentence that is nothing but the notice counts: "In the event this position has been filled, we will keep your CV"
+# is ordinary text, and a wrong rejection hides a real job. Anything subtler is for the model's `expired` flag.
+_EXPIRED_NOTICE = (
+    r"(?:(?:this|the)\s+(?:job|position|posting|vacancy|role|listing)\s+"
     r"(?:has\s+expired|has\s+been\s+(?:filled|closed|removed)|is\s+(?:no\s+longer\s+(?:available|open)|closed|filled|expired)|"
-    r"was\s+(?:filled|closed))\b|"
-    r"\bno\s+longer\s+accepting\s+(?:applications?|applicants?)\b",
-    re.I,
+    r"was\s+(?:filled|closed))"
+    r"|(?:we\s+are\s+|we're\s+)?no\s+longer\s+accepting\s+(?:applications?|applicants?))"
 )
+_EXPIRED_SENTENCE = re.compile(_EXPIRED_NOTICE + r"(?:\s+(?:on\s+[a-z]+|last\s+week|today|yesterday|recently|already))?", re.I)
+_EXPIRED_IN_TITLE = re.compile(r"\b" + _EXPIRED_NOTICE + r"\b", re.I)
+
+
+def says_expired(title: str, description: str) -> bool:
+    """True when the title carries the board's closed notice, or a whole sentence of the description is that notice."""
+    if _EXPIRED_IN_TITLE.search(title or ""):
+        return True
+    for fragment in re.split(r"[.!?;:\n\r|\u2022*#>]+", description or ""):
+        fragment = re.sub(r"^[\W_]+|[\W_]+$", "", fragment)
+        if fragment and _EXPIRED_SENTENCE.fullmatch(fragment):
+            return True
+    return False
+
+
 _UPFRONT_FEE = re.compile(
     r"\b(?:registration|joining|training|security|processing|application)\s+(?:fee|fees|deposit)\b|"
     r"\b(?:you|candidates?|applicants?)\s+(?:must|will|have\s+to|need\s+to|should)\s+pay\b",
@@ -343,7 +359,7 @@ def evaluate(c: dict, profile: dict, today: date) -> Evaluation:
         if re.fullmatch(r"[a-z0-9_:]{1,40}", label)
     ]
     # The model sets an expired-style flag when it sees the notice on the page; the same notice in the text counts too.
-    if any(label.startswith("expired") for label in valid_extras) or _EXPIRED_TEXT.search(haystack):
+    if any(label.startswith("expired") for label in valid_extras) or says_expired(title, description):
         reasons.append("expired")
     flags.extend(valid_extras[:5])  # validate first, then cap, so junk cannot crowd out real flags
 
