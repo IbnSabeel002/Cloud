@@ -85,6 +85,7 @@ refuse a `linkedin_alert` entry without it, so one typed by hand is dropped and 
 | `jobhunt/store.py` | turns those rules into the exact database writes |
 | `jobhunt/report.py` | the Slack digest and the report |
 | `jobhunt/playbook_gate.py` | serves the playbook in chunks and keeps the receipt |
+| `jobhunt/coverage.py` | checks the health rows against what the script itself counted (rows present, reasons allowed, Indeed results written down, the 40-minute clock) |
 | `jobhunt/slack_record.py` | turns what the Slack send returned into the run record's `SlackSent` note |
 | `jobhunt/watchdog.py` | fills the watchdog prompt template (`WATCHDOG.md`) with your private values |
 | `jobhunt/cli.py` | the commands the playbook calls |

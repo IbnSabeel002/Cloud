@@ -103,7 +103,9 @@ def read_chunk(n: int, now: float | None = None) -> str:
     sha = sha8(text)
     receipt = _load_receipt()
     if n == 1 or receipt.get("sha") != sha or receipt.get("total") != total:
-        receipt = {"sha": sha, "total": total, "read": [], "commit": commit_short(), "at": now}
+        # `started` is the script's own clock for the run: reading chunk 1 is the worker's first mandatory command.
+        # Re-reading chunk 1 later can only make the run look younger, which is the safe side.
+        receipt = {"sha": sha, "total": total, "read": [], "commit": commit_short(), "at": now, "started": now}
     receipt["read"] = sorted(set(receipt.get("read", [])) | {n})
     receipt["at"] = now
     _save_receipt(receipt)
@@ -137,6 +139,39 @@ def status(now: float | None = None) -> tuple[bool, str, list[int]]:
     if now - float(receipt.get("at", 0)) > RECEIPT_MAX_AGE_SECONDS:
         return False, "PLAYBOOK RECEIPT IS OLD (read it again from chunk 1)", list(range(1, total + 1))
     return True, f"Playbook @{receipt.get('commit', 'nogit')} sha:{sha} read {total}/{total}", []
+
+
+def elapsed_minutes(now: float | None = None) -> float | None:
+    """Minutes since this run read chunk 1, by the script's clock. None when there is no usable start (nothing to trust)."""
+    try:
+        started = float(_load_receipt()["started"])
+    except (KeyError, TypeError, ValueError):
+        return None
+    now = time.time() if now is None else now
+    return max(0.0, (now - started) / 60)
+
+
+def note_elapsed(now: float | None = None) -> float | None:
+    """Print-time helper for `elapsed`: the minutes so far, remembered as the largest the script has ever said in this run.
+
+    A worker that cites the time limit as the reason it skipped a source must have asked for this number, and the
+    number must have reached 40. The receipt (and so this memory) starts afresh with every chunk-1 read.
+    """
+    minutes = elapsed_minutes(now)
+    if minutes is None:
+        return None
+    receipt = _load_receipt()
+    receipt["limit_seen"] = max(float(receipt.get("limit_seen") or 0), minutes)
+    _save_receipt(receipt)
+    return minutes
+
+
+def limit_seen_minutes() -> float | None:
+    """The largest elapsed time `elapsed` has printed in this run, or None if it was never asked."""
+    try:
+        return float(_load_receipt()["limit_seen"])
+    except (KeyError, TypeError, ValueError):
+        return None
 
 
 def receipt_line(now: float | None = None) -> str | None:
