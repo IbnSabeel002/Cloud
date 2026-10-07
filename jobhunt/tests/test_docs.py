@@ -476,3 +476,31 @@ class TrackerPageTests(unittest.TestCase):
 
     def test_page_never_assigns_untrusted_urls_without_a_scheme_check(self):
         self.assertIn("/^https:\\/\\//", self.page)
+
+
+class CoverageDocsTests(unittest.TestCase):
+    """The README says what the coverage checks do and do not do, and the code and the words agree."""
+
+    def test_the_readme_names_every_row_and_every_reason(self):
+        from jobhunt import coverage
+        readme = (Path(__file__).resolve().parents[1] / "README.md").read_text(encoding="utf-8")
+        section = readme.split("### Coverage checks")[1].split("| File | Job |")[0]
+        for name in coverage.REQUIRED:
+            self.assertIn(f"`{name}`", section, name)
+        for reason in coverage.REASONS:
+            self.assertIn(f"`{reason}`", section, reason)
+        for words in ("`hits_seen`", "`elapsed`", "`Warnings`", "`Degraded`", "`RawBySource`", "Known limits"):
+            self.assertIn(words, section, words)
+
+    def test_the_watchdog_doc_says_it_does_not_read_the_new_fields(self):
+        text = (Path(__file__).resolve().parents[1] / "WATCHDOG.md").read_text(encoding="utf-8")
+        self.assertIn("does not read those three", text)
+        for field in ("Warnings", "Degraded", "RawBySource"):
+            self.assertIn(f"`{field}`", text)
+
+    def test_the_run_record_has_the_fields_the_docs_name(self):
+        from jobhunt import store
+        doc = store.run_doc({"today": "2026-10-07", "new_shortlisted": 0, "already_seen": 0, "below_threshold": 0,
+                             "rejected_jobs": 0, "raw_by_source": {"indeed": 3}}, [], None, None, ["⚠️ x"], True)
+        for field in ("Warnings", "Degraded", "RawBySource"):
+            self.assertIn(field, doc)

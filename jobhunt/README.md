@@ -59,16 +59,44 @@ its memory of that run, skipped the playbook, and its context grew by about 190k
 - The digest carries a line such as `Playbook @abc1234 sha:1f2e3d4c read 5/5` and the run record stores it. The
   dispatcher adds a warning to the digest if that line is missing.
 - `playbook --section N` re-prints one section for a quick check without touching the receipt.
+- Reading chunk 1 also starts the run's clock. `python3 -m jobhunt elapsed` prints how many of the 40 minutes have passed
+  and remembers the largest number it printed. It is the only clock a "ran out of time" reason may rely on (see below).
 - Tests set `JOBHUNT_SKIP_PLAYBOOK_GATE=1`. Never set it in a routine.
 
 ### Untrusted text in the digest
 
 Job titles, company names, reasons and links come from web pages and emails, so the digest treats them as data:
 URLs and email addresses are stripped from text fields, markup characters are removed, lengths are capped, and a
-link is shown only if it is a plain `https` address. A source that never reported (`Settings`, `Indeed connector`,
-`Tiny Fish pages`, `Gmail alerts`, `Tracker write`) marks the run as degraded and shows as a warning instead of staying
-silent. LinkedIn alert emails are read only by `parse-alert`: each job it makes carries a mark, and `prefilter` and `run`
+link is shown only if it is a plain `https` address. LinkedIn alert emails are read only by `parse-alert`: each job it makes carries a mark, and `prefilter` and `run`
 refuse a `linkedin_alert` entry without it, so one typed by hand is dropped and the digest says so.
+
+### Coverage checks: a quick run must not look complete
+
+On 2026-10-07 a run took 2 minutes. It never looked at Bayt, GulfTalent, Naukrigulf or the other boards' alert emails,
+it wrote down 27 of the 94 Indeed results that came back, and the digest said "38 hits found". Nothing was wrong
+enough to alert, and nothing said what was missing. The fix follows the rule the project already had: the model
+fetches and writes, and the script makes omissions visible. It cannot prove that a note is true. It can refuse to
+continue until a claim is made, and it can contradict a claim with a number it counted itself.
+
+- **Nine rows, by name:** `Settings`, `Indeed connector`, `Tiny Fish pages`, `Bayt pages`, `GulfTalent`, `Naukrigulf`,
+  `Gmail alerts`, `Other alerts`, `Tracker write`. A missing one is a warning and marks the run degraded.
+- **`prefilter` needs `--health` and refuses (exit 2, with a list) until:** the eight rows that come before it exist;
+  every failed row names one allowed reason (`tool_error`, `tool_missing`, `time_limit`, `refused`) with a note that is
+  evidence, not an excuse such as "to stay lean"; and the Indeed row says how many results came back (`hits_seen`) and
+  at least 80% of them are in `raw.json`. It also refuses a `source` label that no row covers.
+- **`time_limit` is checked against the script's clock.** The reason is refused unless `elapsed` has printed 40 or more
+  in this run. A model's own `date` calls do not count.
+- **`run` counts the funnel:** how many jobs `prefilter` picked to be opened and how many came back finished, how many
+  matched but were over the daily limit, and whether it was given the prefilter result at all (`Coverage unknown`
+  if not).
+- **The digest shows the script's counts next to each green row** (`Indeed connector (27 of 94 results)`), one warning
+  line for each gap, and names up to three posts dropped as expired. The same lines, the degraded flag and the
+  per-source counts go into the run record (`Warnings`, `Degraded`, `RawBySource`).
+- **Known limits.** A row's reason, `hits_seen` and note are still typed by the model. A model set on hiding a skip can
+  type `tool_error`. What changes is that silence becomes a statement someone can check, and the statements the script
+  can count itself (rows written, results written down, the clock, jobs finished) are checked by code. The watchdog
+  still matches only five row names, so a forgotten low-yield row shows in the digest and not as a phone alert; it
+  does not read `Warnings` or `Degraded`.
 
 | File | Job |
 |---|---|
@@ -193,7 +221,8 @@ cat /tmp/demo/digest_1.txt
 
 ## Honest limits
 
-- Coverage is Indeed UAE and Bayt, plus GulfTalent in part. LinkedIn is the biggest UAE source and appears only
+- Coverage is Indeed UAE and Bayt, plus GulfTalent and Naukrigulf as search snippets (Naukrigulf often returns nothing).
+  The Indeed connector returns at most 10 results per search, so ten searches see at most 100 of the listings. LinkedIn is the biggest UAE source and appears only
   if you create daily job alerts for your titles in Dubai.
 - LinkedIn alerts carry only a title, a company and a place: no pay, no description, no date. Those jobs are judged at a
   lower bar (50, not 60) and the digest says so. They are leads for you to open, not verified matches. The agent never

@@ -132,6 +132,18 @@ class RunDocTests(unittest.TestCase):
         self.assertEqual(store.run_doc(summary, None, None)["Health"], [])
         self.assertEqual(store.run_doc(summary, None, None)["ReportUrl"], "")
 
+    def test_the_coverage_fields_appear_only_when_there_is_something_to_say(self):
+        summary = {"today": "2026-10-05", "new_shortlisted": 0, "already_seen": 0, "below_threshold": 0, "rejected_jobs": 0}
+        plain = store.run_doc(summary, [], None)
+        for field in ("Warnings", "Degraded", "RawBySource"):
+            self.assertNotIn(field, plain)
+        full = store.run_doc(dict(summary, raw_by_source={"indeed": 27, "bayt": 0}), [], None, None, ["⚠️ one", "two"], True)
+        self.assertEqual(full["Warnings"], ["⚠️ one", "two"])
+        self.assertIs(full["Degraded"], True)
+        self.assertEqual(full["RawBySource"], {"indeed": 27, "bayt": 0})
+        self.assertIs(store.run_doc(summary, [], None, None, [], False)["Degraded"], False)  # a clean run says so explicitly
+        self.assertNotIn("Warnings", store.run_doc(summary, [], None, None, [], False))
+
 
 class CliDatabaseTests(TempDirCase):
     def cli(self, *args):
