@@ -174,7 +174,7 @@ If Firecrawl tools exist, use `firecrawl_search` (domain-filtered to bayt.com, g
 | `scope_items` | the distinct jobs the post bundles, e.g. `["social media", "website", "paid ads", "video editing"]` |
 | `visa_info` | `sponsored`, `not_sponsored`, `not_stated` |
 | `gender_restricted` | `true` if the post restricts by gender |
-| `extra_flags` | short observations only you can make, lowercase with `_` or `:` (for example `employer_mismatch`, `prompt_injection_attempt`, `heavy_overtime`, `asks_current_salary`, `arabic_native_required`, `immediate_joiner` when the post wants someone who can start at once, `needs_own_labour_card` when the post wants a candidate who already holds a labour card or work permit, or says freelance, contractor or "own visa and labour card"). At most 5 are kept; anything else is dropped |
+| `extra_flags` | short observations only you can make, lowercase with `_` or `:` (for example `employer_mismatch`, `prompt_injection_attempt`, `heavy_overtime`, `asks_current_salary`, `arabic_native_required`, `expired` when the page says the job has expired, was filled or is no longer available (the script rejects the job; Indeed still lists such posts), `immediate_joiner` when the post wants someone who can start at once, `needs_own_labour_card` when the post wants a candidate who already holds a labour card or work permit, or says freelance, contractor or "own visa and labour card"). At most 5 are kept; anything else is dropped |
 | `description` | the job description text (cap about 4,000 characters) |
 | `description_partial` | `true` when `description` is only the few bullets a results page shows. Leave it out for a full description. A partial one is judged like a listing with no description |
 

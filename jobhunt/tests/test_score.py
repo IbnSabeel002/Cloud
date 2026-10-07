@@ -204,6 +204,28 @@ class HardRejectTests(unittest.TestCase):
         self.assertEqual(e.reject_reasons, [])
         self.assertIn("contract", e.flags)
 
+    def test_expired_posts_are_rejected_whether_the_model_flags_them_or_the_text_says_so(self):
+        self.assertIn("expired", self.reasons(extra_flags=["expired_on_indeed"]))
+        self.assertIn("expired", self.reasons(extra_flags=["expired"]))
+        self.assertIn("expired", self.reasons(extra_flags=["Expired_On_Indeed"]))  # flags are lower-cased first
+        for text in ("This job has expired on Indeed.", "This job is no longer available.", "The position has been filled.",
+                     "This role is closed.", "We are no longer accepting applications.", "The vacancy was filled last week."):
+            self.assertIn("expired", self.reasons(description=RICH_JD + " " + text), text)
+        self.assertIn("expired", self.reasons(title="Content Creator - this position has been filled"))
+
+    def test_ordinary_words_do_not_make_a_post_expired(self):
+        for text in ("Applications close on 30 October.", "You will help us close more deals and expire no ideas.",
+                     "The role is open to applicants worldwide.", "We closed a funding round this year.",
+                     "Our offer expires after 7 days.", "Experience with expired-domain SEO is a plus."):
+            self.assertNotIn("expired", self.reasons(description=RICH_JD + " " + text), text)
+        self.assertNotIn("expired", self.reasons(extra_flags=["employer_mismatch", "heavy_overtime"]))
+
+    def test_an_expired_post_is_never_shortlisted_however_well_it_scores(self):
+        e = ev(extra_flags=["expired_on_indeed"])
+        self.assertEqual(e.status, "rejected")
+        self.assertFalse(e.strong)
+        self.assertEqual(e.reject_reasons[0], "expired")
+
     def test_commission_only(self):
         self.assertIn("commission_only", self.reasons(description=RICH_JD + " This is a commission-only position."))
         self.assertIn("commission_only", self.reasons(description=RICH_JD + " 100% commission, no basic salary."))

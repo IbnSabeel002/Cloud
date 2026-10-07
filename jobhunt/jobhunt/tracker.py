@@ -191,10 +191,12 @@ def merge(existing: list[dict], evaluations: list, today: date, profile: dict) -
                 if any(_norm_cell(k, row[k]) != _norm_cell(k, v) for k, v in fresh.items()):
                     row.update(fresh)
                     row["LastSeen"] = today.isoformat()  # LastSeen means: last time the agent wrote this row
-            elif ev.status != "shortlisted" and row["Status"] == "Shortlisted" and "stale" in ev.reject_reasons:
+            elif (ev.status != "shortlisted" and row["Status"] == "Shortlisted"
+                  and ("stale" in ev.reject_reasons or "expired" in ev.reject_reasons)):
                 row["Status"] = "Dead"
                 row["LastSeen"] = today.isoformat()
-                row["Notes"] = (row["Notes"] + " " if row["Notes"] else "") + "auto: posting went stale"
+                why = "went stale" if "stale" in ev.reject_reasons else "expired"
+                row["Notes"] = (row["Notes"] + " " if row["Notes"] else "") + f"auto: posting {why}"
                 stats["auto_dead"] += 1
             continue
         if ev.status == "shortlisted":

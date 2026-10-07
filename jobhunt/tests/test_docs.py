@@ -343,6 +343,13 @@ class PlaybookTests(unittest.TestCase):
         for phrase in ("say so in the Drive report", "note it in the Drive report"):
             self.assertNotIn(phrase, PLAYBOOK, phrase)
 
+    def test_the_model_is_told_to_flag_an_expired_post_and_the_script_rejects_it(self):
+        row = [l for l in PLAYBOOK.splitlines() if l.startswith("| `extra_flags`")][0]
+        self.assertIn("`expired` when the page says the job has expired, was filled or is no longer available", row)
+        self.assertIn("the script rejects the job", row)
+        from jobhunt.report import REASON_LABELS
+        self.assertEqual(REASON_LABELS["expired"], "posting expired")
+
     def test_a_run_with_slack_off_still_records_that_it_is_off(self):
         notify = PLAYBOOK.split("## 9. Notify")[1].split("## 10. Stop check")[0]
         self.assertIn("go to step 5 with `--state off`", notify)

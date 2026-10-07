@@ -23,6 +23,15 @@ _COMMISSION_ONLY = re.compile(
     r"no\s+(?:basic|fixed)\s+salary|without\s+(?:a\s+)?basic\s+salary",
     re.I,
 )
+# A post the board itself says is closed. Indeed shows these pages ("This job has expired on Indeed") and still lists
+# them in search results, so a scored-and-shortlisted dead post wastes the owner's morning.
+_EXPIRED_TEXT = re.compile(
+    r"\b(?:this|the)\s+(?:job|position|posting|vacancy|role|listing)\s+"
+    r"(?:has\s+expired|has\s+been\s+(?:filled|closed|removed)|is\s+(?:no\s+longer\s+(?:available|open)|closed|filled|expired)|"
+    r"was\s+(?:filled|closed))\b|"
+    r"\bno\s+longer\s+accepting\s+(?:applications?|applicants?)\b",
+    re.I,
+)
 _UPFRONT_FEE = re.compile(
     r"\b(?:registration|joining|training|security|processing|application)\s+(?:fee|fees|deposit)\b|"
     r"\b(?:you|candidates?|applicants?)\s+(?:must|will|have\s+to|need\s+to|should)\s+pay\b",
@@ -333,6 +342,9 @@ def evaluate(c: dict, profile: dict, today: date) -> Evaluation:
         label for label in (str(x).strip().lower() for x in (c.get("extra_flags") or []))
         if re.fullmatch(r"[a-z0-9_:]{1,40}", label)
     ]
+    # The model sets an expired-style flag when it sees the notice on the page; the same notice in the text counts too.
+    if any(label.startswith("expired") for label in valid_extras) or _EXPIRED_TEXT.search(haystack):
+        reasons.append("expired")
     flags.extend(valid_extras[:5])  # validate first, then cap, so junk cannot crowd out real flags
 
     # --- components

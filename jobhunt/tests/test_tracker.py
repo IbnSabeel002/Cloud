@@ -223,6 +223,24 @@ class MergeTests(unittest.TestCase):
         self.assertIn("stale", rows[0]["Notes"])
         self.assertEqual(stats["auto_dead"], 1)
 
+    def test_shortlisted_job_that_comes_back_expired_becomes_dead(self):
+        e = ev(extra_flags=["expired_on_indeed"])
+        rows, stats = self.merge([row(Key=e.job_id, Status="Shortlisted")], [e])
+        self.assertEqual(rows[0]["Status"], "Dead")
+        self.assertEqual(rows[0]["Notes"], "auto: posting expired")
+        self.assertEqual(stats["auto_dead"], 1)
+
+    def test_a_new_expired_job_is_screened_out_not_stored(self):
+        rows, stats = self.merge([], [ev(extra_flags=["expired_on_indeed"])])
+        self.assertEqual(rows, [])
+        self.assertEqual(stats["reject_reasons"]["expired"], 1)
+
+    def test_applied_job_that_comes_back_expired_is_left_alone(self):
+        e = ev(extra_flags=["expired"])
+        rows, stats = self.merge([row(Key=e.job_id, Status="Applied")], [e])
+        self.assertEqual(rows[0]["Status"], "Applied")
+        self.assertEqual(stats["auto_dead"], 0)
+
     def test_applied_job_that_goes_stale_is_left_alone(self):
         e = ev(posted="2026-08-01")
         rows, stats = self.merge([row(Key=e.job_id, Status="Applied")], [e])

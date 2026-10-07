@@ -14,6 +14,7 @@ SLACK_LIMIT = 4500  # Slack allows 5,000 per text element; leave headroom.
 
 REASON_LABELS = {
     "stale": "posting too old",
+    "expired": "posting expired",
     "junior_level": "fresher/entry/junior",
     "pay_below_floor": "pay under your floor",
     "commission_only": "commission-only",
