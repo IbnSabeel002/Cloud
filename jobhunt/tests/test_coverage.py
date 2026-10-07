@@ -103,9 +103,11 @@ class RowCountTests(unittest.TestCase):
         self.assertEqual(cov.missing_rows(["junk", 3, None]), list(cov.REQUIRED))  # junk rows are ignored, not a crash
 
     def test_typed_entries_are_counted_per_row_by_the_scripts_own_labels(self):
-        raw = {"indeed": 27, "indeed_page": 3, "bayt": 2, "linkedin_alert": 8, "other": 1, "indeed_alert": 2}
+        raw = {"indeed": 27, "indeed_page": 3, "careers": 4, "bayt": 2, "naukrigulf": 5, "linkedin_alert": 8, "other": 1,
+               "indeed_alert": 2}
         self.assertEqual(cov.typed_count(raw, "Indeed connector"), 27)
-        self.assertEqual(cov.typed_count(raw, "Tiny Fish pages"), 3)
+        self.assertEqual(cov.typed_count(raw, "Tiny Fish pages"), 7)  # the Indeed pages and the watchlist pages
+        self.assertEqual(cov.typed_count(raw, "Naukrigulf"), 5)
         self.assertEqual(cov.typed_count(raw, "Bayt pages"), 2)
         self.assertEqual(cov.typed_count(raw, "GulfTalent"), 0)
         self.assertEqual(cov.typed_count(raw, "Gmail alerts"), 8)

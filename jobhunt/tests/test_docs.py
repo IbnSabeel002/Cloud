@@ -308,6 +308,9 @@ class PlaybookTests(unittest.TestCase):
         self.assertIn("Write down every result row, repeats included", PLAYBOOK)
         self.assertIn("a job that came back twice is two entries", PLAYBOOK)
 
+    def test_a_row_may_not_be_softened_to_get_past_the_prefilter(self):
+        self.assertIn("Do not weaken a row to get past it: a false row is worse than a failed one.", PLAYBOOK)
+
     def test_every_hit_and_every_picked_job_has_to_come_back(self):
         self.assertIn("**every** entry of `need.json`'s `fetch` list", PLAYBOOK)
         self.assertIn("Coverage unknown", PLAYBOOK)

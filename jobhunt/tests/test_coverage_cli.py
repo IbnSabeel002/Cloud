@@ -196,6 +196,25 @@ class RunCoverageTests(CliCase):
         for name in ("report.html", "report.md"):
             self.assertIn("did not come back finished", (self.dir / "out" / name).read_text(encoding="utf-8"))
 
+    def test_the_report_command_uses_the_scripts_clock_for_the_time_limit_excuse(self):
+        picked = [hit(n) for n in range(3)]
+        self.run_it(picked, picked)
+        health = replace_row(complete_health(), "Naukrigulf",
+                             {"source": "Naukrigulf", "ok": False, "reason": "time_limit", "detail": "past 40 minutes"})
+        health.append({"source": "Tracker write", "ok": True})
+        path = write_health(self.dir / "health.json", health)
+        playbook_gate.read_chunk(1, now=1_000_000.0)
+        with mock.patch("time.time", return_value=1_000_000.0 + 3 * 60):
+            self.cli("elapsed")
+        self.cli("report", "--out", self.dir / "out", "--health", path)
+        self.assertIn("only 3 of 40 minutes had passed", (self.dir / "out" / "digest_1.txt").read_text(encoding="utf-8"))
+        with mock.patch("time.time", return_value=1_000_000.0 + 45 * 60):
+            self.cli("elapsed")
+        self.cli("report", "--out", self.dir / "out", "--health", path)
+        digest = (self.dir / "out" / "digest_1.txt").read_text(encoding="utf-8")
+        self.assertIn("Naukrigulf not run: the 40-minute limit ran out", digest)
+        self.assertNotIn("marked failed but", digest)
+
     def test_a_clean_run_has_no_warnings_in_its_record(self):
         picked = [hit(n) for n in range(3)]
         self.run_it(picked, picked)
