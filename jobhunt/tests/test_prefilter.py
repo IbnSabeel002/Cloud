@@ -9,6 +9,8 @@ from pathlib import Path
 from jobhunt.cli import main, pipeline, prefilter
 from jobhunt.profile import load_profile
 
+from .support import write_health
+
 FIXTURE = Path(__file__).parent / "fixtures" / "candidates_2026-10-05.json"
 TODAY = date(2026, 10, 5)
 SEARCH_KEYS = ("source", "source_id", "title", "company", "location", "url", "posted")
@@ -102,7 +104,8 @@ class PrefilterCliTests(unittest.TestCase):
             out = Path(tmp) / "sub" / "need.json"
             buf = io.StringIO()
             with contextlib.redirect_stdout(buf):
-                code = main(["prefilter", "--candidates", str(raw), "--out", str(out), "--today", "2026-10-05", "--limit", "3"])
+                code = main(["prefilter", "--candidates", str(raw), "--health", str(write_health(Path(tmp) / "health.json")),
+                             "--out", str(out), "--today", "2026-10-05", "--limit", "3"])
             self.assertEqual(code, 0)
             written = json.loads(out.read_text())
             self.assertEqual(len(written["fetch"]), 3)

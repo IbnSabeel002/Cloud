@@ -27,7 +27,11 @@ it names every required check, at least one source worked, and the run noted whe
   you switched off looks the same as one that died: no record. The alert says so and tells you to switch the watchdog off
   too if the stop was on purpose.
 - Whether the jobs are good, or whether data was typed by hand or a source was skipped. The run's own digest warns about
-  those.
+  those. Since the coverage checks (see the README) the run record also stores `Warnings`, `Degraded` and `RawBySource`
+  and carries nine health rows. The watchdog still matches only the original five names and does not read those three
+  fields. That is deliberate: a forgotten low-yield row (Bayt, GulfTalent, Naukrigulf, other alerts) belongs in the
+  digest you read at breakfast, not in a phone alert. If you later want a degraded day to alert, read `Degraded` in
+  step 3 and add the fixed sentence for it to step 4, then re-test the prompt as described below.
 - Anything if the watchdog itself is not running. If both routines stop at once (a connector expiry, a paused plan),
   nothing arrives.
 - **Whether the message reaches you at all. This has not worked yet.** On 2026-10-06 the routine's push and email were tried

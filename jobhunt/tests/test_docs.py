@@ -241,7 +241,7 @@ class PlaybookTests(unittest.TestCase):
 
     def test_the_candidate_file_holds_only_the_fetched_entries(self):
         # A live test run put all 58 hits in candidates.json and the digest counted jobs twice.
-        self.assertIn("the entries of `need.json`'s `fetch` list", PLAYBOOK)
+        self.assertIn("**every** entry of `need.json`'s `fetch` list", PLAYBOOK)
         self.assertIn("Do not add the hits listed under `skipped` or `overflow`", PLAYBOOK)
         self.assertNotIn("plus any hits that need no details", PLAYBOOK)
 
@@ -277,11 +277,51 @@ class PlaybookTests(unittest.TestCase):
         # The first dispatcher canary skipped Gmail and the Tiny Fish pages "to keep the run short" and finished in 2 minutes.
         rule = PLAYBOOK.split("**Run every source in 4.1, 4.2 and 4.3.")[1].split("\n\n")[0]
         self.assertIn("Never skip one to save time, effort or tokens", PLAYBOOK)
-        for reason in ("(1) the tool returned an error", "(2) the tool does not exist in this session",
-                       "(3) the 40-minute limit"):
+        for reason in ("(1) `tool_error`: the tool returned an error", "(2) `tool_missing`: the tool does not exist in this session",
+                       "(3) `time_limit`: the 40-minute limit", "(4) `refused`: a call was refused"):
             self.assertIn(reason, rule)
         self.assertIn("are not reasons", rule)
         self.assertIn('"Skipped to keep the run short"', rule)
+
+    def test_the_reason_words_in_the_playbook_are_the_ones_the_code_accepts(self):
+        from jobhunt import coverage
+        rule = PLAYBOOK.split("**Run every source in 4.1, 4.2 and 4.3.")[1].split("\n\n")[0]
+        self.assertEqual(set(re.findall(r"`(tool_error|tool_missing|time_limit|refused)`", rule)), set(coverage.REASONS))
+        self.assertIn("python3 -m jobhunt elapsed", rule)
+        self.assertIn(f"{coverage.TIME_LIMIT_MINUTES}-minute limit", rule)
+
+    def test_the_source_table_and_the_labels_match_the_code(self):
+        from jobhunt import coverage
+        table = PLAYBOOK.split("| Row name | Written in | What it stands for |")[1].split("\n\n")[0]
+        listed = re.findall(r"^\| `([^`]+)` \|", table, re.M)
+        self.assertEqual(sorted(listed), sorted(coverage.REQUIRED))  # the table follows the order of the run, not the code's
+        self.assertEqual(len(listed), len(set(listed)))
+        row = next(l for l in PLAYBOOK.splitlines() if l.startswith("| `source` |"))
+        for label in coverage.KNOWN_SOURCES:
+            self.assertIn(f"`{label}`", row, label)
+
+    def test_the_prefilter_command_and_its_refusal_are_written_down(self):
+        self.assertIn("prefilter --candidates $RUN/raw.json --health $RUN/health.json", PLAYBOOK)
+        self.assertIn("The prefilter refuses to run (exit 2, with a list)", PLAYBOOK)
+        self.assertIn("`hits_seen`", PLAYBOOK)
+        self.assertIn("at least 80%", PLAYBOOK)
+        self.assertIn("Write down every result row, repeats included", PLAYBOOK)
+        self.assertIn("a job that came back twice is two entries", PLAYBOOK)
+
+    def test_a_row_may_not_be_softened_to_get_past_the_prefilter(self):
+        self.assertIn("Do not weaken a row to get past it: a false row is worse than a failed one.", PLAYBOOK)
+
+    def test_every_hit_and_every_picked_job_has_to_come_back(self):
+        self.assertIn("**every** entry of `need.json`'s `fetch` list", PLAYBOOK)
+        self.assertIn("Coverage unknown", PLAYBOOK)
+        self.assertIn("leave them in, word for word", PLAYBOOK)
+
+    def test_other_alerts_are_reported_with_threads_and_jobs(self):
+        self.assertIn("`N threads, M jobs`", PLAYBOOK)
+        self.assertIn('"0 threads, 0 jobs"', PLAYBOOK)
+
+    def test_section_four_is_reprinted_before_it_is_followed(self):
+        self.assertIn("Before sections 4, 5, 8 and 9, print that section again", PLAYBOOK)
 
     def test_alerts_are_only_read_by_the_script(self):
         # Canary 2 asked Gmail for the plain-text format, got small inline results and typed the jobs in by hand.
@@ -342,6 +382,13 @@ class PlaybookTests(unittest.TestCase):
     def test_a_slack_failure_is_not_written_into_a_report_that_already_exists(self):
         for phrase in ("say so in the Drive report", "note it in the Drive report"):
             self.assertNotIn(phrase, PLAYBOOK, phrase)
+
+    def test_the_model_is_told_to_flag_an_expired_post_and_the_script_rejects_it(self):
+        row = [l for l in PLAYBOOK.splitlines() if l.startswith("| `extra_flags`")][0]
+        self.assertIn("`expired` when the page says the job has expired, was filled or is no longer available", row)
+        self.assertIn("the script rejects the job", row)
+        from jobhunt.report import REASON_LABELS
+        self.assertEqual(REASON_LABELS["expired"], "posting expired")
 
     def test_a_run_with_slack_off_still_records_that_it_is_off(self):
         notify = PLAYBOOK.split("## 9. Notify")[1].split("## 10. Stop check")[0]
@@ -432,3 +479,31 @@ class TrackerPageTests(unittest.TestCase):
 
     def test_page_never_assigns_untrusted_urls_without_a_scheme_check(self):
         self.assertIn("/^https:\\/\\//", self.page)
+
+
+class CoverageDocsTests(unittest.TestCase):
+    """The README says what the coverage checks do and do not do, and the code and the words agree."""
+
+    def test_the_readme_names_every_row_and_every_reason(self):
+        from jobhunt import coverage
+        readme = (Path(__file__).resolve().parents[1] / "README.md").read_text(encoding="utf-8")
+        section = readme.split("### Coverage checks")[1].split("| File | Job |")[0]
+        for name in coverage.REQUIRED:
+            self.assertIn(f"`{name}`", section, name)
+        for reason in coverage.REASONS:
+            self.assertIn(f"`{reason}`", section, reason)
+        for words in ("`hits_seen`", "`elapsed`", "`Warnings`", "`Degraded`", "`RawBySource`", "Known limits"):
+            self.assertIn(words, section, words)
+
+    def test_the_watchdog_doc_says_it_does_not_read_the_new_fields(self):
+        text = (Path(__file__).resolve().parents[1] / "WATCHDOG.md").read_text(encoding="utf-8")
+        self.assertIn("does not read those three", text)
+        for field in ("Warnings", "Degraded", "RawBySource"):
+            self.assertIn(f"`{field}`", text)
+
+    def test_the_run_record_has_the_fields_the_docs_name(self):
+        from jobhunt import store
+        doc = store.run_doc({"today": "2026-10-07", "new_shortlisted": 0, "already_seen": 0, "below_threshold": 0,
+                             "rejected_jobs": 0, "raw_by_source": {"indeed": 3}}, [], None, None, ["⚠️ x"], True)
+        for field in ("Warnings", "Degraded", "RawBySource"):
+            self.assertIn(field, doc)

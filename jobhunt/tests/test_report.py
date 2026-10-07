@@ -12,7 +12,9 @@ from jobhunt.report import (
 FIXTURE = Path(__file__).parent / "fixtures" / "candidates_2026-10-05.json"
 TODAY = date(2026, 10, 5)
 HEALTHY = [{"source": "Settings", "ok": True}, {"source": "Indeed connector", "ok": True},
-           {"source": "Tiny Fish pages", "ok": True}, {"source": "Gmail alerts", "ok": True},
+           {"source": "Tiny Fish pages", "ok": True}, {"source": "Bayt pages", "ok": True},
+           {"source": "GulfTalent", "ok": True}, {"source": "Naukrigulf", "ok": True},
+           {"source": "Gmail alerts", "ok": True}, {"source": "Other alerts", "ok": True},
            {"source": "Tracker write", "ok": True}]
 
 
@@ -35,7 +37,8 @@ class DigestTests(unittest.TestCase):
         text = self.digest()
         self.assertIn("Mon 05 Oct 2026", text)
         self.assertIn("day 1", text)
-        self.assertIn("✅ Settings · ✅ Indeed connector · ✅ Tiny Fish pages · ✅ Gmail alerts · ✅ Tracker write", text)
+        self.assertIn(("✅ Settings · ✅ Indeed connector · ✅ Tiny Fish pages · ✅ Bayt pages · ✅ GulfTalent · ✅ Naukrigulf · "
+                      "✅ Gmail alerts · ✅ Other alerts · ✅ Tracker write"), text)
         self.assertIn("**5 new** shortlisted", text)
         self.assertIn("9 screened out", text)
         self.assertNotIn("Degraded", text)
@@ -289,7 +292,8 @@ class RequiredStepsTests(unittest.TestCase):
 
     def test_every_required_source_is_checked_on_its_own(self):
         self.assertEqual(set(REQUIRED_SOURCES), {"Settings", "Indeed connector", "Tiny Fish pages", "Gmail alerts",
-                                                 "Tracker write"})
+                                                 "Tracker write", "Bayt pages", "GulfTalent", "Naukrigulf",
+                                                 "Other alerts"})
         for name in REQUIRED_SOURCES:
             with self.subTest(name):
                 text, health = self.line([h for h in HEALTHY if h["source"] != name])
@@ -414,3 +418,156 @@ class LabelTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+def healthy_with(**changes):
+    """HEALTHY with some rows replaced, keyed by source name."""
+    return [dict(changes[h["source"]], source=h["source"]) if h["source"] in changes else dict(h) for h in HEALTHY]
+
+
+class CoverageInTheDigestTests(unittest.TestCase):
+    """The digest judges the health rows against the script's own counts and says so in plain words."""
+
+    def setUp(self):
+        self.r = run()
+
+    def texts(self, health, summary=None, limit_seen=None):
+        summary = dict(self.r.summary, **(summary or {}))
+        digest = "\n".join(digest_chunks(summary, self.r.shortlist, health, None, None, TODAY, limit_seen=limit_seen))
+        md = render_report_md(summary, self.r.shortlist, health, None, TODAY, limit_seen=limit_seen)
+        page = render_report_html(summary, self.r.shortlist, health, None, TODAY, limit_seen=limit_seen)
+        return digest, md, page
+
+    def test_counts_the_script_made_appear_next_to_green_rows(self):
+        health = healthy_with(**{"Indeed connector": {"ok": True, "hits_seen": 94}})
+        raw = {"indeed": 94, "indeed_page": 3, "bayt": 1, "gulftalent": 0, "linkedin_alert": 8, "bayt_alert": 2}
+        digest, _, _ = self.texts(health, {"raw_by_source": raw})
+        self.assertIn("✅ Indeed connector (94 of 94 results)", digest)
+        self.assertIn("✅ Tiny Fish pages (3 entries)", digest)
+        self.assertIn("✅ Bayt pages (1 entry)", digest)
+        self.assertIn("✅ GulfTalent (0 entries)", digest)
+        self.assertIn("✅ Gmail alerts (8 entries)", digest)
+        self.assertIn("✅ Other alerts (2 entries)", digest)
+        self.assertIn("✅ Settings ·", digest)  # a row that is not a search source gets no count
+        self.assertNotIn("Degraded", digest)
+
+    def test_no_counts_without_the_scripts_numbers(self):
+        digest, _, _ = self.texts(HEALTHY)
+        self.assertNotIn("entries)", digest)
+        self.assertNotIn("results)", digest)
+
+    def test_indeed_results_that_were_never_written_down_are_a_warning_in_all_three_outputs(self):
+        # 2026-10-07: 94 results came back, 27 were written down, and the digest said "38 hits found".
+        health = healthy_with(**{"Indeed connector": {"ok": True, "hits_seen": 94}})
+        for text in self.texts(health, {"raw_by_source": {"indeed": 27, "indeed_page": 3}}):
+            self.assertIn("⚠️ Indeed connector: only 27 of the 94 results that came back were written down.", text)
+        digest = self.texts(health, {"raw_by_source": {"indeed": 27}})[0]
+        self.assertIn("Degraded run", digest)
+        self.assertIn("✅ Indeed connector (27 of 94 results)", digest)
+
+    def test_a_failed_row_with_an_allowed_reason_reads_as_not_run_with_the_agents_note(self):
+        health = healthy_with(**{"Bayt pages": {"ok": False, "reason": "tool_error", "detail": "HTTP 403 from bayt.com"}})
+        digest = self.texts(health)[0]
+        self.assertIn("⚠️ Bayt pages not run: the tool gave an error (HTTP 403 from bayt.com)", digest)
+        self.assertIn("Degraded run", digest)
+        self.assertNotIn("marked failed but", digest)  # the reason counts, so there is nothing more to warn about
+
+    def test_a_failed_row_with_no_reason_or_a_bad_reason_is_called_out(self):
+        for change, words in (({"ok": False, "detail": "skipped to stay lean"}, "no reason was given"),
+                              ({"ok": False, "reason": "boredom", "detail": "x"}, "the reason given is not an allowed one"),
+                              ({"ok": False, "reason": "tool_error"}, "no evidence was given")):
+            with self.subTest(change):
+                digest, md, page = self.texts(healthy_with(Naukrigulf=change))
+                for text in (digest, md, page):
+                    self.assertIn(f"⚠️ Naukrigulf is marked failed but {words}.", text)
+
+    def test_the_time_limit_excuse_is_checked_against_the_scripts_clock(self):
+        health = healthy_with(GulfTalent={"ok": False, "reason": "time_limit", "detail": "past 40 minutes"})
+        self.assertIn("never run to check it", self.texts(health, limit_seen=None)[0])
+        self.assertIn("only 3 of 40 minutes had passed", self.texts(health, limit_seen=3.2)[0])
+        accepted = self.texts(health, limit_seen=41)[0]
+        self.assertIn("⚠️ GulfTalent not run: the 40-minute limit ran out (past 40 minutes)", accepted)
+        self.assertNotIn("marked failed but", accepted)
+
+    def test_a_row_that_is_not_a_search_source_may_fail_without_a_reason(self):
+        digest = self.texts(healthy_with(Settings={"ok": False, "detail": "could not read the settings"}))[0]
+        self.assertIn("⚠️ Settings failed (could not read the settings)", digest)
+        self.assertNotIn("marked failed but", digest)
+
+    def test_alert_mails_found_but_no_jobs_taken_is_a_warning(self):
+        health = healthy_with(**{"Gmail alerts": {"ok": True, "detail": "3 alerts, 0 jobs"}})
+        self.assertIn("⚠️ Gmail alerts: 3 alert mail(s) were found but no jobs were taken from them.", self.texts(health)[0])
+
+    def test_two_rows_for_one_source_is_a_warning(self):
+        digest = self.texts(HEALTHY + [{"source": "bayt pages", "ok": True}])[0]
+        self.assertIn("⚠️ Bayt pages has more than one row in the health report.", digest)
+
+    def test_labels_that_no_row_covers_are_listed_and_cannot_inject_markup(self):
+        digest = self.texts(HEALTHY, {"raw_by_source": {"indeed": 3, "indeed_ae": 4, "x](http://evil.example)": 1}})[0]
+        self.assertIn("counted nowhere: ", digest)
+        self.assertIn("indeed_ae ×4", digest)
+        self.assertNotIn("evil.example", digest)
+        self.assertNotIn("](", digest.split("counted nowhere")[1].split("\n")[0])
+
+    def test_jobs_picked_but_not_finished_are_counted(self):
+        digest, md, page = self.texts(HEALTHY, {"picked": 20, "finished": 13})
+        for text in (digest, md, page):
+            self.assertIn("⚠️ 7 of 20 jobs picked for a closer look did not come back finished.", text)
+        self.assertIn("Degraded run", digest)
+        self.assertNotIn("did not come back finished", self.texts(HEALTHY, {"picked": 20, "finished": 20})[0])
+
+    def test_overflow_is_a_note_not_a_warning(self):
+        digest = self.texts(HEALTHY, {"overflow": 12})[0]
+        self.assertIn("Not opened: 12 more matching jobs were over the daily limit.", digest)
+        self.assertNotIn("Degraded", digest)
+
+    def test_coverage_unknown_is_a_warning(self):
+        digest = self.texts(HEALTHY, {"coverage_unknown": True})[0]
+        self.assertIn("⚠️ Coverage unknown: the prefilter result was not used", digest)
+        self.assertIn("Degraded run", digest)
+
+    def test_a_row_name_the_script_does_not_know_is_still_shown_but_never_required(self):
+        digest = self.texts(HEALTHY + [{"source": "Firecrawl", "ok": True}])[0]
+        self.assertIn("✅ Firecrawl", digest)
+        self.assertNotIn("Degraded", digest)
+
+    def test_ok_has_to_be_a_real_true(self):
+        digest = self.texts(healthy_with(Naukrigulf={"ok": "true", "detail": "x"}))[0]
+        self.assertIn("⚠️ Naukrigulf failed", digest)
+
+    def test_junk_rows_do_not_crash_the_digest(self):
+        digest = self.texts(HEALTHY + ["junk", 3, None])[0]
+        self.assertIn("Run health:", digest)
+
+    def test_the_digest_banner_no_longer_claims_sources_failed_when_the_cause_is_coverage(self):
+        digest = self.texts(HEALTHY, {"picked": 5, "finished": 1})[0]
+        self.assertIn("Degraded run — today's list may be incomplete. See the warnings below.", digest)
+        self.assertNotIn("some sources failed", digest)
+
+
+class ExpiredNamesTests(unittest.TestCase):
+    def setUp(self):
+        self.r = run()
+
+    def test_the_dropped_expired_posts_are_named_in_all_three_outputs(self):
+        summary = dict(self.r.summary, expired_examples=["Creative Lead — Acme", "Social Manager — Beta"],
+                       reject_reasons={"expired": 2, "stale": 1})
+        text = "\n".join(digest_chunks(summary, self.r.shortlist, HEALTHY, None, None, TODAY))
+        self.assertIn("Dropped as expired: Creative Lead — Acme; Social Manager — Beta", text)
+        self.assertIn("Dropped as expired: Creative Lead — Acme", render_report_md(summary, self.r.shortlist, HEALTHY, None, TODAY))
+        self.assertIn("Dropped as expired: Creative Lead — Acme", render_report_html(summary, self.r.shortlist, HEALTHY, None, TODAY))
+
+    def test_nothing_is_said_when_nothing_expired_and_the_names_cannot_inject_markup(self):
+        self.assertNotIn("Dropped as expired", "\n".join(digest_chunks(self.r.summary, self.r.shortlist, HEALTHY, None, None, TODAY)))
+        summary = dict(self.r.summary, expired_examples=["Role](https://evil.example/login) [Reply — Co"])
+        text = "\n".join(digest_chunks(summary, self.r.shortlist, HEALTHY, None, None, TODAY))
+        self.assertNotIn("evil.example", text)
+
+    def test_the_pipeline_names_up_to_three_expired_posts(self):
+        from jobhunt.cli import pipeline as pipe
+        data = json.loads(FIXTURE.read_text(encoding="utf-8"))["candidates"]
+        for n, c in enumerate(data[:5]):
+            c["extra_flags"] = ["expired_on_indeed"]
+        summary = pipe(load_profile(), data, [], TODAY).summary
+        self.assertEqual(len(summary["expired_examples"]), 3)
+        self.assertTrue(all(" — " in x for x in summary["expired_examples"]))

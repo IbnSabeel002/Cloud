@@ -11,6 +11,7 @@ from jobhunt import store, tracker
 from jobhunt.cli import main, pipeline
 from jobhunt.profile import load_profile
 
+from .support import write_health
 from .test_tracker import TODAY, ev, row
 
 FIXTURES = Path(__file__).parent / "fixtures"
@@ -131,6 +132,18 @@ class RunDocTests(unittest.TestCase):
         self.assertEqual(store.run_doc(summary, None, None)["Health"], [])
         self.assertEqual(store.run_doc(summary, None, None)["ReportUrl"], "")
 
+    def test_the_coverage_fields_appear_only_when_there_is_something_to_say(self):
+        summary = {"today": "2026-10-05", "new_shortlisted": 0, "already_seen": 0, "below_threshold": 0, "rejected_jobs": 0}
+        plain = store.run_doc(summary, [], None)
+        for field in ("Warnings", "Degraded", "RawBySource"):
+            self.assertNotIn(field, plain)
+        full = store.run_doc(dict(summary, raw_by_source={"indeed": 27, "bayt": 0}), [], None, None, ["⚠️ one", "two"], True)
+        self.assertEqual(full["Warnings"], ["⚠️ one", "two"])
+        self.assertIs(full["Degraded"], True)
+        self.assertEqual(full["RawBySource"], {"indeed": 27, "bayt": 0})
+        self.assertIs(store.run_doc(summary, [], None, None, [], False)["Degraded"], False)  # a clean run says so explicitly
+        self.assertNotIn("Warnings", store.run_doc(summary, [], None, None, [], False))
+
 
 class CliDatabaseTests(TempDirCase):
     def cli(self, *args):
@@ -181,7 +194,8 @@ class CliDatabaseTests(TempDirCase):
             {"title": "AI Influencer Marketer", "company": "Trade Quo Global Ltd", "location": "Dubai", "posted": "Posted on: September 27, 2026", "url": "https://x"},
             {"title": "Creative AI Producer", "company": "New Studio", "location": "Dubai", "posted": "Posted on: October 03, 2026", "url": "https://y"},
         ]))
-        self.assertEqual(self.cli("prefilter", "--candidates", raw, "--db-dir", DB, "--out", self.dir / "need.json", "--today", "2026-10-05"), 0)
+        self.assertEqual(self.cli("prefilter", "--candidates", raw, "--health", write_health(self.dir / "health.json"), "--db-dir", DB,
+                                  "--out", self.dir / "need.json", "--today", "2026-10-05"), 0)
         need = json.loads((self.dir / "need.json").read_text())
         self.assertEqual([c["company"] for c in need["fetch"]], ["New Studio"])
         self.assertEqual(need["skipped"]["already_seen"], 1)

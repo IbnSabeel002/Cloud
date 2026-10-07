@@ -96,8 +96,13 @@ def plan_writes(before: list[dict], after: list[dict], out_dir: str | Path, coll
     return manifest
 
 
-def run_doc(summary: dict, health: list[dict] | None, report_url: str | None, playbook: str | None = None) -> dict:
-    """The document the tracker page shows as 'last run'. `playbook` is the receipt line of the playbook that ran."""
+def run_doc(summary: dict, health: list[dict] | None, report_url: str | None, playbook: str | None = None,
+            notes: list[str] | None = None, degraded: bool | None = None) -> dict:
+    """The document the tracker page shows as 'last run'.
+
+    `playbook` is the receipt line of the playbook that ran. `notes` are the warning lines the digest printed under the
+    health line, and `degraded` says whether the digest called the run degraded.
+    """
     doc = {
         "Date": summary["today"],
         "HuntDay": summary.get("hunt_day"),
@@ -110,4 +115,10 @@ def run_doc(summary: dict, health: list[dict] | None, report_url: str | None, pl
     }
     if playbook:
         doc["Playbook"] = playbook
+    if notes:
+        doc["Warnings"] = list(notes)
+    if degraded is not None:
+        doc["Degraded"] = bool(degraded)
+    if summary.get("raw_by_source"):
+        doc["RawBySource"] = dict(summary["raw_by_source"])
     return doc

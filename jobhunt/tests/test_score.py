@@ -204,6 +204,51 @@ class HardRejectTests(unittest.TestCase):
         self.assertEqual(e.reject_reasons, [])
         self.assertIn("contract", e.flags)
 
+    def test_expired_posts_are_rejected_whether_the_model_flags_them_or_the_text_says_so(self):
+        self.assertIn("expired", self.reasons(extra_flags=["expired_on_indeed"]))
+        self.assertIn("expired", self.reasons(extra_flags=["expired"]))
+        self.assertIn("expired", self.reasons(extra_flags=["Expired_On_Indeed"]))  # flags are lower-cased first
+        for text in ("This job has expired on Indeed.", "This job is no longer available.", "The position has been filled.",
+                     "This role is closed.", "We are no longer accepting applications.", "The vacancy was filled last week."):
+            self.assertIn("expired", self.reasons(description=RICH_JD + " " + text), text)
+        self.assertIn("expired", self.reasons(title="Content Creator - this position has been filled"))
+
+    def test_ordinary_words_do_not_make_a_post_expired(self):
+        for text in ("Applications close on 30 October.", "You will help us close more deals and expire no ideas.",
+                     "The role is open to applicants worldwide.", "We closed a funding round this year.",
+                     "Our offer expires after 7 days.", "Experience with expired-domain SEO is a plus."):
+            self.assertNotIn("expired", self.reasons(description=RICH_JD + " " + text), text)
+        self.assertNotIn("expired", self.reasons(extra_flags=["employer_mismatch", "heavy_overtime"]))
+
+    def test_a_sentence_that_only_mentions_a_filled_or_closed_post_does_not_reject_a_live_job(self):
+        # Critics showed the first version of the rule rejected real jobs whose text talked about these cases.
+        for text in ("In the event this position has been filled, we will keep your CV on file.",
+                     "If this role is closed to you because of your visa, tell us.",
+                     "We will let you know once the position has been filled.",
+                     "This position is closed-loop: you own the funnel from lead to renewal.",
+                     "Note that the job is no longer available to candidates who need sponsorship, so apply early.",
+                     "Reply within 7 days, after which we are no longer accepting applications from agencies and recruiters."):
+            self.assertNotIn("expired", self.reasons(description=RICH_JD + " " + text), text)
+
+    def test_the_notice_counts_on_its_own_line_inside_a_longer_description(self):
+        for page in (RICH_JD + "\n\n## This job has expired on Indeed\n\nSee similar jobs",
+                     "⚠️ The position has been filled.\n" + RICH_JD,
+                     RICH_JD + "\nThis job is no longer available"):
+            self.assertIn("expired", self.reasons(description=page), page[:40])
+
+    def test_says_expired_directly(self):
+        from jobhunt.score import says_expired
+        self.assertTrue(says_expired("Role (this job has expired)", ""))
+        self.assertTrue(says_expired("Role", "We're no longer accepting applications"))
+        self.assertFalse(says_expired("Role", ""))
+        self.assertFalse(says_expired("", None))
+
+    def test_an_expired_post_is_never_shortlisted_however_well_it_scores(self):
+        e = ev(extra_flags=["expired_on_indeed"])
+        self.assertEqual(e.status, "rejected")
+        self.assertFalse(e.strong)
+        self.assertEqual(e.reject_reasons[0], "expired")
+
     def test_commission_only(self):
         self.assertIn("commission_only", self.reasons(description=RICH_JD + " This is a commission-only position."))
         self.assertIn("commission_only", self.reasons(description=RICH_JD + " 100% commission, no basic salary."))

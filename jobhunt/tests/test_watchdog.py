@@ -10,7 +10,7 @@ from pathlib import Path
 
 from jobhunt import watchdog
 from jobhunt.cli import main
-from jobhunt.report import REQUIRED_SOURCES
+from jobhunt.coverage import REQUIRED, WATCHDOG_NAMES
 
 VALUES = {
     "TRACKER_URL": "https://claude.ai/artifact/EXAMPLEtracker123",
@@ -229,9 +229,14 @@ class QuietnessAndAccuracyRuleTests(unittest.TestCase):
         keywords = ("settings", "indeed", "tinyfish", "gmail", "tracker")
         for keyword in keywords:
             self.assertIn(keyword, step3)
-        for name in REQUIRED_SOURCES:
+        for name in WATCHDOG_NAMES:
             squashed = re.sub(r"\W", "", name.lower())
             self.assertTrue(any(k in squashed for k in keywords), f"{name} is not covered by the watchdog's name check")
+        # The other rows are left to the digest on purpose: a forgotten low-yield row must not become a phone alert.
+        for name in REQUIRED:
+            if name not in WATCHDOG_NAMES:
+                squashed = re.sub(r"\W", "", name.lower())
+                self.assertFalse(any(k in squashed for k in keywords), f"{name} would be hard-matched by the watchdog")
 
     def test_the_slack_note_the_run_writes_is_the_one_the_watchdog_reads(self):
         from jobhunt import slack_record

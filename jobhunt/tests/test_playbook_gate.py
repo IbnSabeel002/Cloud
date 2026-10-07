@@ -58,6 +58,43 @@ class ReceiptTests(unittest.TestCase):
         for n in range(1, self.total + 1):
             gate.read_chunk(n, now)
 
+    def test_the_run_clock_starts_when_chunk_one_is_read_and_is_the_scripts_own(self):
+        self.assertIsNone(gate.elapsed_minutes(NOW))  # no receipt yet: nothing to trust
+        gate.read_chunk(1, NOW)
+        self.assertEqual(gate.elapsed_minutes(NOW), 0.0)
+        gate.read_chunk(2, NOW + 600)
+        gate.read_chunk(3, NOW + 1800)
+        self.assertEqual(gate.elapsed_minutes(NOW + 3000), 50.0)  # later chunks do not restart it
+        self.assertEqual(gate.elapsed_minutes(NOW - 100), 0.0)    # never negative
+
+    def test_the_largest_elapsed_time_asked_for_is_remembered_for_the_time_limit_check(self):
+        self.assertIsNone(gate.limit_seen_minutes())
+        self.assertIsNone(gate.note_elapsed(NOW))  # no receipt yet: nothing is remembered
+        self.assertIsNone(gate.limit_seen_minutes())
+        gate.read_chunk(1, NOW)
+        self.assertEqual(gate.note_elapsed(NOW + 300), 5.0)
+        self.assertEqual(gate.limit_seen_minutes(), 5.0)
+        self.assertEqual(gate.note_elapsed(NOW + 2700), 45.0)
+        self.assertEqual(gate.note_elapsed(NOW + 600), 10.0)   # asking again earlier never lowers it
+        self.assertEqual(gate.limit_seen_minutes(), 45.0)
+        gate.read_chunk(2, NOW + 2800)                          # reading on keeps it
+        self.assertEqual(gate.limit_seen_minutes(), 45.0)
+        gate.read_chunk(1, NOW + 5000)                          # a new run starts afresh
+        self.assertIsNone(gate.limit_seen_minutes())
+
+    def test_reading_chunk_one_again_restarts_the_clock(self):
+        gate.read_chunk(1, NOW)
+        gate.read_chunk(1, NOW + 3600)
+        self.assertEqual(gate.elapsed_minutes(NOW + 3600 + 120), 2.0)
+
+    def test_a_damaged_or_clockless_receipt_gives_no_elapsed_time(self):
+        self.receipt.write_text("not json", encoding="utf-8")
+        self.assertIsNone(gate.elapsed_minutes(NOW))
+        self.receipt.write_text(json.dumps({"sha": "x", "read": [1]}), encoding="utf-8")
+        self.assertIsNone(gate.elapsed_minutes(NOW))
+        self.receipt.write_text(json.dumps({"started": "yesterday"}), encoding="utf-8")
+        self.assertIsNone(gate.elapsed_minutes(NOW))
+
     def test_there_are_several_chunks(self):
         self.assertGreater(self.total, 2)
 
@@ -182,7 +219,7 @@ class CliGateTests(unittest.TestCase):
     def test_every_decision_command_is_blocked_before_the_playbook_is_read(self):
         raw = self.dir / "raw.json"
         raw.write_text("[]")
-        for argv in (["prefilter", "--candidates", raw, "--out", self.dir / "need.json"],
+        for argv in (["prefilter", "--candidates", raw, "--health", self.dir / "health.json", "--out", self.dir / "need.json"],
                      ["run", "--candidates", raw, "--out", self.dir / "out"],
                      ["report", "--out", self.dir / "out"]):
             code, _, err = self.cli(*argv)
