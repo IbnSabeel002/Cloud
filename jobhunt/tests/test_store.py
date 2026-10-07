@@ -11,6 +11,7 @@ from jobhunt import store, tracker
 from jobhunt.cli import main, pipeline
 from jobhunt.profile import load_profile
 
+from .support import write_health
 from .test_tracker import TODAY, ev, row
 
 FIXTURES = Path(__file__).parent / "fixtures"
@@ -181,7 +182,8 @@ class CliDatabaseTests(TempDirCase):
             {"title": "AI Influencer Marketer", "company": "Trade Quo Global Ltd", "location": "Dubai", "posted": "Posted on: September 27, 2026", "url": "https://x"},
             {"title": "Creative AI Producer", "company": "New Studio", "location": "Dubai", "posted": "Posted on: October 03, 2026", "url": "https://y"},
         ]))
-        self.assertEqual(self.cli("prefilter", "--candidates", raw, "--db-dir", DB, "--out", self.dir / "need.json", "--today", "2026-10-05"), 0)
+        self.assertEqual(self.cli("prefilter", "--candidates", raw, "--health", write_health(self.dir / "health.json"), "--db-dir", DB,
+                                  "--out", self.dir / "need.json", "--today", "2026-10-05"), 0)
         need = json.loads((self.dir / "need.json").read_text())
         self.assertEqual([c["company"] for c in need["fetch"]], ["New Studio"])
         self.assertEqual(need["skipped"]["already_seen"], 1)

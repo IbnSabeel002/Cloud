@@ -219,7 +219,7 @@ class CliGateTests(unittest.TestCase):
     def test_every_decision_command_is_blocked_before_the_playbook_is_read(self):
         raw = self.dir / "raw.json"
         raw.write_text("[]")
-        for argv in (["prefilter", "--candidates", raw, "--out", self.dir / "need.json"],
+        for argv in (["prefilter", "--candidates", raw, "--health", self.dir / "health.json", "--out", self.dir / "need.json"],
                      ["run", "--candidates", raw, "--out", self.dir / "out"],
                      ["report", "--out", self.dir / "out"]):
             code, _, err = self.cli(*argv)

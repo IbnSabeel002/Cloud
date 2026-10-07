@@ -1,11 +1,12 @@
 """Command line entry points. Thin wrappers over pipeline() so the logic stays testable.
 
-    python -m jobhunt prefilter --candidates raw.json --out need.json [--profile p.json] [--db-dir DIR] [--limit 25]
+    python -m jobhunt prefilter --candidates raw.json --health health.json --out need.json [--profile p.json] [--db-dir DIR] [--limit 25]
     python -m jobhunt run    --candidates c.json --out DIR [--profile p.json] [--db-dir DIR] [--prefilter need.json] [--today YYYY-MM-DD]
     python -m jobhunt report --out DIR [--analysis a.json] [--health h.json] [--report-url URL] [--tracker-url URL] [--drafts N]
     python -m jobhunt verify --db-dir DIR --hash SHA256
     python -m jobhunt parse-alert --thread thread1.json [thread2.json ...] --out alerts.json
     python -m jobhunt playbook --chunk N | --section N | --receipt
+    python -m jobhunt elapsed
     python -m jobhunt indeed-links --page fetched.json
     python -m jobhunt availability --card card.json [--today YYYY-MM-DD]
     python -m jobhunt parse-pay "AED 4,000 - 5,000"
@@ -24,10 +25,10 @@ from dataclasses import dataclass
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 
-from . import playbook_gate, slack_record, store, tracker
+from . import coverage, playbook_gate, slack_record, store, tracker
 from .normalize import job_id, job_key
 from .profile import load_profile
-from .report import digest_chunks, render_report_html, render_report_md
+from .report import _health_view, digest_chunks, render_report_html, render_report_md
 from .salary import parse_pay
 from .score import UNPARSED_ALERT, dedupe_candidates, evaluate, validate_candidate
 
@@ -130,6 +131,7 @@ def prefilter(profile: dict, raw: list, existing_rows: list, today: date, limit:
         "skipped_ids": skipped_ids,
         "unparsed_alert_entries": unparsed_alerts,
         "raw_in": len(raw),
+        "raw_by_source": coverage.count_sources(raw),
     }
 
 
@@ -169,14 +171,30 @@ def _gate_blocks() -> bool:
 def cmd_prefilter(args) -> int:
     if _gate_blocks():
         return 2
+    out = Path(args.out)
+    try:
+        out.unlink(missing_ok=True)  # first, so a refusal can never leave an earlier need.json to be used
+    except OSError as exc:
+        raise ValueError(f"cannot clear {args.out}: {exc}") from exc
     today = date.fromisoformat(args.today) if args.today else dubai_today()
     profile = load_profile(args.profile)
     existing, _ = _load_existing(args)
-    result = prefilter(profile, _load_candidates(args.candidates), existing, today, args.limit)
-    Path(args.out).parent.mkdir(parents=True, exist_ok=True)
-    Path(args.out).write_text(json.dumps(result, indent=2, ensure_ascii=False), encoding="utf-8")
+    raw = _load_candidates(args.candidates)
+    if not Path(args.health).exists():
+        raise ValueError(f"{args.health} does not exist: write one health row for every source first (playbook section 4)")
+    problems = coverage.gate_problems(_read_json(args.health), playbook_gate.limit_seen_minutes(), coverage.count_sources(raw))
+    if problems:
+        print("error: not ready for the prefilter. Fix these first:\n" + "\n".join(f"  - {p}" for p in problems), file=sys.stderr)
+        return 2
+    result = prefilter(profile, raw, existing, today, args.limit)
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_text(json.dumps(result, indent=2, ensure_ascii=False), encoding="utf-8")
     print(json.dumps({k: v for k, v in result.items() if k != "fetch"} | {"fetch": len(result["fetch"])}))
     return 0
+
+
+def _candidate_id(c) -> str:
+    return job_id(job_key(c.get("company"), c.get("title"), c.get("location")))
 
 
 def _fold_in_prefilter(summary: dict, need: dict, run_ids: set | None = None) -> None:
@@ -189,6 +207,13 @@ def _fold_in_prefilter(summary: dict, need: dict, run_ids: set | None = None) ->
     skipped = need.get("skipped", {})
     skipped_ids = need.get("skipped_ids") or {}
     summary["raw_hits"] = need.get("raw_in", 0)
+    summary["raw_by_source"] = need.get("raw_by_source") or {}
+    summary["overflow"] = need.get("overflow", 0)
+    if run_ids is not None:
+        # The jobs the prefilter picked to be opened, and how many of them came back in the candidates file.
+        picked = {_candidate_id(c) for c in need.get("fetch") or [] if isinstance(c, dict)}
+        summary["picked"] = len(picked)
+        summary["finished"] = len(picked & run_ids)
     # Both commands see the same hand-typed entries only if the model re-adds them, so take the larger count.
     summary["unparsed_alert_entries"] = max(summary.get("unparsed_alert_entries", 0), need.get("unparsed_alert_entries", 0))
     for reason, count in skipped.items():
@@ -220,6 +245,8 @@ def cmd_run(args) -> int:
             for c in candidates if isinstance(c, dict)
         }
         _fold_in_prefilter(result.summary, _read_json(args.prefilter), run_ids)
+    else:
+        result.summary["coverage_unknown"] = True  # nothing was counted before `run`, so nothing can be compared
 
     out = Path(args.out)
     out.mkdir(parents=True, exist_ok=True)
@@ -264,6 +291,15 @@ def cmd_playbook(args) -> int:
     return 0
 
 
+def cmd_elapsed(args) -> int:
+    minutes = playbook_gate.note_elapsed()
+    if minutes is None:
+        print("elapsed unknown: the playbook has not been read through the gate in this run", file=sys.stderr)
+        return 1
+    print(f"elapsed {int(minutes)} of {coverage.TIME_LIMIT_MINUTES} minutes")
+    return 0
+
+
 def cmd_indeed_links(args) -> int:
     from .indeed_links import links_by_page  # only this command needs it
 
@@ -301,14 +337,19 @@ def cmd_report(args) -> int:
     health = _read_json(args.health) if args.health and Path(args.health).exists() else None
     today = date.fromisoformat(summary["today"])
     playbook = playbook_gate.receipt_line()
+    limit_seen = playbook_gate.limit_seen_minutes()
     chunks = digest_chunks(summary, shortlist, health, analysis, args.report_url, today, tracker_url=args.tracker_url,
-                           drafts_created=args.drafts, playbook_line=playbook)
+                           drafts_created=args.drafts, playbook_line=playbook, limit_seen=limit_seen)
     for i, chunk in enumerate(chunks, 1):
         (out / f"digest_{i}.txt").write_text(chunk, encoding="utf-8")
-    (out / "report.html").write_text(render_report_html(summary, shortlist, health, analysis, today), encoding="utf-8")
-    (out / "report.md").write_text(render_report_md(summary, shortlist, health, analysis, today), encoding="utf-8")
+    (out / "report.html").write_text(
+        render_report_html(summary, shortlist, health, analysis, today, limit_seen), encoding="utf-8")
+    (out / "report.md").write_text(
+        render_report_md(summary, shortlist, health, analysis, today, limit_seen), encoding="utf-8")
+    view = _health_view(health, summary, limit_seen)
     (out / "run_doc.json").write_text(
-        json.dumps(store.run_doc(summary, health, args.report_url, playbook), ensure_ascii=False), encoding="utf-8")
+        json.dumps(store.run_doc(summary, health, args.report_url, playbook, view.notes, view.degraded), ensure_ascii=False),
+        encoding="utf-8")
     print(json.dumps({"digest_files": len(chunks), "report": ["report.html", "report.md"], "run_doc": "run_doc.json"}))
     return 0
 
@@ -374,6 +415,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     pre = sub.add_parser("prefilter", help="pick which raw search hits are worth a job-details fetch")
     pre.add_argument("--candidates", required=True)
+    pre.add_argument("--health", required=True, help="health.json with one row per source; refused until it is complete")
     pre.add_argument("--out", required=True)
     pre.add_argument("--profile")
     pre.add_argument("--tracker")
@@ -418,6 +460,9 @@ def build_parser() -> argparse.ArgumentParser:
     which.add_argument("--section", type=int, help="print section N again (does not change the receipt)")
     which.add_argument("--receipt", action="store_true", help="print the receipt line; exit 1 unless every chunk was read")
     pb.set_defaults(func=cmd_playbook)
+
+    el = sub.add_parser("elapsed", help="print how many of the run's 40 minutes have passed (the only clock a time-limit reason may rely on)")
+    el.set_defaults(func=cmd_elapsed)
 
     il = sub.add_parser("indeed-links", help="list each job card's own link, in page order, from a saved Indeed results page")
     il.add_argument("--page", required=True, help="a file written by Tiny Fish fetch_content (with links turned on)")

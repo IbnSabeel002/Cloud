@@ -105,7 +105,7 @@ def failure_problem(row: dict, limit_seen=None, reason_required: bool = True) ->
     if not reason:
         return "no reason was given" if reason_required else None
     if reason not in REASONS:
-        return "that is not an allowed reason"
+        return "the reason given is not an allowed one"
     if not detail:
         return "no evidence was given"
     if _EXCUSE.search(detail):
@@ -130,6 +130,16 @@ def duplicate_rows(health) -> list[str]:
             name = canonical(h.get("source"))
             counts[name] = counts.get(name, 0) + 1
     return [name for name, n in counts.items() if n > 1]
+
+
+def count_sources(raw) -> dict:
+    """Entries in raw.json by their `source` label (a missing label counts as 'other', as the scorer reads it)."""
+    counts: dict[str, int] = {}
+    for entry in raw if isinstance(raw, list) else []:
+        if isinstance(entry, dict):
+            label = str(entry.get("source") or "other")
+            counts[label] = counts.get(label, 0) + 1
+    return counts
 
 
 def typed_count(raw_by_source, row_name: str):
@@ -170,7 +180,7 @@ def indeed_problem(row: dict, typed) -> str | None:
     return None
 
 
-_COUNTS = re.compile(r"(\d+)\s+threads?\b.*?(\d+)\s+jobs?\b", re.I | re.S)
+_COUNTS = re.compile(r"(\d+)\s+(?:threads?|alerts?|mails?|emails?)\b.*?(\d+)\s+jobs?\b", re.I | re.S)
 
 
 def alert_problem(row: dict) -> str | None:
@@ -181,8 +191,12 @@ def alert_problem(row: dict) -> str | None:
     return None
 
 
-def gate_problems(health, limit_seen=None) -> list[str]:
-    """What must be fixed in health.json before the prefilter may run (an empty list means it may)."""
+def gate_problems(health, limit_seen=None, raw_by_source=None) -> list[str]:
+    """What must be fixed before the prefilter may run (an empty list means it may).
+
+    `raw_by_source` is the script's count of the entries in raw.json by their `source` label. Without it the rows are
+    checked on their own; with it the Indeed row is also checked against the entries that were really written down.
+    """
     problems = []
     if not isinstance(health, list):
         return ["health.json must be a list of rows like {\"source\": ..., \"ok\": true, \"detail\": ...}"]
@@ -207,4 +221,22 @@ def gate_problems(health, limit_seen=None) -> list[str]:
             problems.append("Indeed connector: add hits_seen, the total number of results all the searches returned, as a whole number")
     for name in duplicate_rows(health):
         problems.append(f"{name} has more than one row; keep one")
+    problems += count_problems(health, raw_by_source)
+    return problems
+
+
+def count_problems(health, raw_by_source) -> list[str]:
+    """Where the entries in raw.json contradict a row: Indeed results left unwritten, labels that count nowhere."""
+    if not isinstance(health, list) or not isinstance(raw_by_source, dict):
+        return []
+    problems = []
+    indeed = next((h for h in health if isinstance(h, dict) and canonical(h.get("source")) == "Indeed connector"), None)
+    if indeed is not None:
+        why = indeed_problem(indeed, typed_count(raw_by_source, "Indeed connector"))
+        if why:
+            problems.append(f"Indeed connector: {why}. Write every result row to raw.json (a job that came back twice is two entries)")
+    unknown = unknown_sources(raw_by_source)
+    if unknown:
+        listed = ", ".join(f"{label or '(none)'} x{n}" for label, n in sorted(unknown.items()))
+        problems.append(f"raw.json has entries whose source is not one of {', '.join(sorted(KNOWN_SOURCES))}: {listed}")
     return problems

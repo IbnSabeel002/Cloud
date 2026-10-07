@@ -63,12 +63,12 @@ class FailureReasonTests(unittest.TestCase):
 
     def test_no_reason_an_unknown_reason_or_no_evidence_does_not_count(self):
         self.assertEqual(cov.failure_problem({"detail": "x"}), "no reason was given")
-        self.assertEqual(cov.failure_problem({"reason": "not needed today", "detail": "x"}), "that is not an allowed reason")
+        self.assertEqual(cov.failure_problem({"reason": "not needed today", "detail": "x"}), "the reason given is not an allowed one")
         self.assertEqual(cov.failure_problem({"reason": "tool_error", "detail": "  "}), "no evidence was given")
 
     def test_a_reason_that_is_not_required_may_be_left_out(self):
         self.assertIsNone(cov.failure_problem({"detail": "verify mismatch"}, reason_required=False))
-        self.assertEqual(cov.failure_problem({"reason": "bogus", "detail": "x"}, reason_required=False), "that is not an allowed reason")
+        self.assertEqual(cov.failure_problem({"reason": "bogus", "detail": "x"}, reason_required=False), "the reason given is not an allowed one")
 
     def test_a_note_that_reads_like_an_excuse_is_not_evidence(self):
         for note in ("skipped to stay lean", "Skipped to keep the run short", "not needed today", "to save time",

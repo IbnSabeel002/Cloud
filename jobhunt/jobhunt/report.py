@@ -8,7 +8,10 @@ from __future__ import annotations
 
 import html
 import re
+from dataclasses import dataclass, field
 from datetime import date
+
+from . import coverage
 
 SLACK_LIMIT = 4500  # Slack allows 5,000 per text element; leave headroom.
 
@@ -53,8 +56,8 @@ _SAFE_URL = re.compile(r"^https://[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)+(?::\d+)?(?:[
 
 # Steps whose absence from the health list means the run skipped them (a run that never read the settings looked
 # healthy; a run that skipped Gmail "to keep it short" would have looked like a quick one). A name must appear in the
-# health file, ok or not. The playbook pins these exact names in section 4.
-REQUIRED_SOURCES = ("Settings", "Indeed connector", "Tiny Fish pages", "Gmail alerts", "Tracker write")
+# health file, ok or not. The playbook pins these exact names in section 4. The rules live in coverage.py.
+REQUIRED_SOURCES = coverage.REQUIRED
 
 
 def _plain(text, limit: int = 120) -> str:
@@ -108,24 +111,12 @@ def _pay(entry: dict) -> str:
     return f"{_plain(entry['pay_display'], 60)} ({_plain(entry.get('pay_source', 'unknown'), 20)})"
 
 
-def _health_line(health: list[dict] | None) -> tuple[str, bool]:
-    if not health:
-        return "Run health: no source report supplied", True
-    parts, degraded = [], False
-    for h in health:
-        name = _plain(h.get("source"), 60) or "unnamed source"
-        if h.get("ok"):
-            parts.append(f"✅ {name}")
-        else:
-            degraded = True
-            detail = _plain(h.get("detail"), 120)
-            parts.append(f"⚠️ {name} failed" + (f" ({detail})" if detail else ""))
-    reported = {str(h.get("source") or "").strip().lower() for h in health}
-    for required in REQUIRED_SOURCES:
-        if required.lower() not in reported:
-            degraded = True
-            parts.append(f"⚠️ {required} never reported")
-    return "Run health: " + " · ".join(parts), degraded
+@dataclass
+class HealthView:
+    """The health line, the warnings that go under it, and whether the run counts as degraded."""
+    line: str
+    notes: list = field(default_factory=list)   # each is one line: a warning (starts with ⚠️) or a plain note
+    degraded: bool = False
 
 
 def _alert_warning(summary: dict) -> str:
@@ -135,6 +126,79 @@ def _alert_warning(summary: dict) -> str:
         return ""
     return (f"⚠️ {n} LinkedIn alert {'entry' if n == 1 else 'entries'} typed by hand "
             f"{'was' if n == 1 else 'were'} dropped: the parse-alert command was not used.")
+
+
+def _count_text(canon: str, row: dict, raw_by_source) -> str:
+    """What the script itself counted for a green row, such as '27 of 94 results'. Empty when it has no count."""
+    typed = coverage.typed_count(raw_by_source, canon)
+    if typed is None:
+        return ""
+    seen = coverage.hits_seen(row)
+    if canon == "Indeed connector" and seen:
+        return f" ({typed} of {seen} results)"
+    return f" ({typed} {'entry' if typed == 1 else 'entries'})"
+
+
+def _health_view(health: list[dict] | None, summary: dict | None = None, limit_seen=None) -> HealthView:
+    """Judge the model's health rows next to what the script counted. `summary` carries the script's own numbers."""
+    summary = summary or {}
+    raw_by_source = summary.get("raw_by_source")
+    notes: list[str] = []
+    if not health:
+        line, degraded = "Run health: no source report supplied", True
+    else:
+        parts, degraded, rows = [], False, {}
+        for h in health:
+            if not isinstance(h, dict):
+                continue
+            name = _plain(h.get("source"), 60) or "unnamed source"
+            canon = coverage.canonical(h.get("source"))
+            if canon:
+                rows.setdefault(canon, []).append(h)
+            if coverage.is_ok(h):
+                parts.append(f"✅ {name}" + _count_text(canon, h, raw_by_source))
+                if canon in ("Gmail alerts", "Other alerts") and coverage.alert_problem(h):
+                    notes.append(f"⚠️ {canon}: {coverage.alert_problem(h)}.")
+                continue
+            degraded = True
+            detail = _plain(h.get("detail"), 120)
+            reason = coverage.normalise_reason(h.get("reason"))
+            if reason in coverage.REASONS:
+                parts.append(f"⚠️ {name} not run: {coverage.REASONS[reason]}" + (f" ({detail})" if detail else ""))
+            else:
+                parts.append(f"⚠️ {name} failed" + (f" ({detail})" if detail else ""))
+            why = coverage.failure_problem(h, limit_seen, reason_required=canon in coverage.ROW_SOURCES)
+            if why:
+                notes.append(f"⚠️ {canon or name} is marked failed but {why}.")
+        for required in coverage.REQUIRED:
+            if required not in rows:
+                degraded = True
+                parts.append(f"⚠️ {required} never reported")
+        for dup in coverage.duplicate_rows(health):
+            notes.append(f"⚠️ {dup} has more than one row in the health report.")
+        indeed = rows.get("Indeed connector")
+        if indeed and len(indeed) == 1:
+            why = coverage.indeed_problem(indeed[0], coverage.typed_count(raw_by_source, "Indeed connector"))
+            if why:
+                notes.append(f"⚠️ Indeed connector: {why}.")
+        line = "Run health: " + " · ".join(parts)
+    unknown = coverage.unknown_sources(raw_by_source)
+    if unknown:
+        listed = ", ".join(f"{_plain(label, 30) or '(none)'} ×{n}" for label, n in sorted(unknown.items()))
+        notes.append(f"⚠️ Some entries had a source label that no health row covers, so they were counted nowhere: {listed}.")
+    if summary.get("coverage_unknown"):
+        notes.append("⚠️ Coverage unknown: the prefilter result was not used, so the script could not count what was found.")
+    picked, finished = summary.get("picked"), summary.get("finished")
+    if isinstance(picked, int) and isinstance(finished, int) and finished < picked:
+        n = picked - finished
+        notes.append(f"⚠️ {n} of {picked} jobs picked for a closer look did not come back finished.")
+    if isinstance(summary.get("overflow"), int) and summary["overflow"] > 0:
+        notes.append(f"Not opened: {summary['overflow']} more matching jobs were over the daily limit.")
+    alert = _alert_warning(summary)
+    if alert:
+        notes.append(alert)
+    degraded = degraded or any(n.startswith("⚠️") for n in notes)
+    return HealthView(line, notes, degraded)
 
 
 def _chunk(text: str, limit: int) -> list[str]:
@@ -159,20 +223,18 @@ def digest_chunks(
     summary: dict, shortlist: list[dict], health: list[dict] | None, analysis: dict | None,
     report_url: str | None, today: date, max_top: int = 5, limit: int = SLACK_LIMIT,
     tracker_url: str | None = None, drafts_created: int | None = None, playbook_line: str | None = None,
+    limit_seen: float | None = None,
 ) -> list[str]:
     analysis = analysis or {}
-    health_line, degraded = _health_line(health)
-    alert_warning = _alert_warning(summary)
-    degraded = degraded or bool(alert_warning)
+    view = _health_view(health, summary, limit_seen)
     reasons = summary.get("reject_reasons", {})
     out = []
     day = summary.get("hunt_day")
     out.append(f"**Job hunt · {today.strftime('%a %d %b %Y')}" + (f" · day {day}**" if day else "**"))
-    if degraded:
-        out.append("⚠️ **Degraded run — some sources failed, so today's list may be incomplete.**")
-    out.append(health_line)
-    if alert_warning:
-        out.append(alert_warning)
+    if view.degraded:
+        out.append("⚠️ **Degraded run — today's list may be incomplete. See the warnings below.**")
+    out.append(view.line)
+    out.extend(view.notes)
     if playbook_line:
         out.append(_plain(playbook_line, 100))
     out.append(
@@ -235,13 +297,14 @@ def _para(text) -> str:
 
 def render_report_html(
     summary: dict, shortlist: list[dict], health: list[dict] | None, analysis: dict | None, today: date,
+    limit_seen: float | None = None,
 ) -> str:
     analysis = analysis or {}
-    health_line, _ = _health_line(health)
+    view = _health_view(health, summary, limit_seen)
     parts = [
         f"<h1>Job hunt report · {_esc(today.strftime('%A %d %B %Y'))}</h1>",
-        f"<p>{_esc(health_line)}</p>",
-        *([f"<p>{_esc(_alert_warning(summary))}</p>"] if _alert_warning(summary) else []),
+        f"<p>{_esc(view.line)}</p>",
+        *[f"<p>{_esc(note)}</p>" for note in view.notes],
         "<p>"
         f"<b>{summary['new_shortlisted']}</b> new shortlisted · {summary['already_seen']} already seen · "
         f"{summary['rejected_jobs']} screened out · {summary['below_threshold']} weak matches · "
@@ -290,12 +353,13 @@ def render_report_html(
 
 def render_report_md(
     summary: dict, shortlist: list[dict], health: list[dict] | None, analysis: dict | None, today: date,
+    limit_seen: float | None = None,
 ) -> str:
     analysis = analysis or {}
-    health_line, _ = _health_line(health)
-    lines = [f"# Job hunt report · {today.isoformat()}", "", health_line, ""]
-    if _alert_warning(summary):
-        lines += [_alert_warning(summary), ""]
+    view = _health_view(health, summary, limit_seen)
+    lines = [f"# Job hunt report · {today.isoformat()}", "", view.line, ""]
+    if view.notes:
+        lines += [*view.notes, ""]
     lines.append(
         f"{summary['new_shortlisted']} new shortlisted · {summary['already_seen']} already seen · "
         f"{summary['rejected_jobs']} screened out · {summary['below_threshold']} weak matches"
